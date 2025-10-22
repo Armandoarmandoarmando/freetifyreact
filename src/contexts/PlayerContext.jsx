@@ -33,6 +33,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 export const PlayerProvider = ({ children }) => {
   const audioRef = useRef(typeof Audio !== 'undefined' ? new Audio() : null);
   const objectUrlRef = useRef(null);
+  const playSessionRef = useRef(0);
 
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState(null);
@@ -121,6 +122,7 @@ export const PlayerProvider = ({ children }) => {
     setCurrentTrack(trackMeta);
     setStatus('loading');
     setError(null);
+    setProgress({ currentTime: 0, duration: 0 });
 
     try {
       await audio.play();
@@ -160,6 +162,10 @@ export const PlayerProvider = ({ children }) => {
     const audio = audioRef.current;
     if (!track || !audio) return;
 
+    const sessionId = playSessionRef.current + 1;
+    playSessionRef.current = sessionId;
+    const ensureActive = () => playSessionRef.current === sessionId;
+
     const artists = track.artistas || (track.artista ? [track.artista] : []);
     const metadata = {
       title: track.nombre,
@@ -175,11 +181,17 @@ export const PlayerProvider = ({ children }) => {
     setStatus('loading');
     setError(null);
     setCurrentTrack({ ...metadata });
+    setProgress({ currentTime: 0, duration: 0 });
+
+    audio.pause();
 
     const localCacheKey = track.spotify_track_id ? cacheMap[track.spotify_track_id] : null;
     if (localCacheKey && canUseAudioCache) {
       try {
         const record = await getTrackRecord(localCacheKey);
+        if (!ensureActive()) {
+          return;
+        }
         if (record?.blob) {
           metadata.cacheKey = localCacheKey;
           metadata.source = 'local-cache';
@@ -202,9 +214,15 @@ export const PlayerProvider = ({ children }) => {
         durationMs: track.duration_ms ?? (track.duracion ? track.duracion * 1000 : undefined),
       });
     } catch (requestError) {
-      setError('No se pudo obtener el stream');
-      setStatus('error');
+      if (ensureActive()) {
+        setError('No se pudo obtener el stream');
+        setStatus('error');
+      }
       throw requestError;
+    }
+
+    if (!ensureActive()) {
+      return;
     }
 
     const cacheKey = response.cache_key;
@@ -221,6 +239,9 @@ export const PlayerProvider = ({ children }) => {
     if (response.is_cached) {
       try {
         const cachedResponse = await fetchCachedTrack(cacheKey);
+        if (!ensureActive()) {
+          return;
+        }
         if (!cachedResponse) {
           throw new Error('cache_missing');
         }
@@ -240,6 +261,23 @@ export const PlayerProvider = ({ children }) => {
     const directUrl = proxyEndpoint ? `${API_URL}${proxyEndpoint}` : response.stream_url;
 
     if (!directUrl) {
+      if (cacheKey) {
+        const cachedResult = await waitForCachedBlob(cacheKey, response.content_type);
+        if (!ensureActive()) {
+          return;
+        }
+        if (cachedResult) {
+          metadata.source = 'cache';
+          metadata.contentType = cachedResult.contentType;
+          await startPlaybackWithBlob({
+            blob: cachedResult.blob,
+            contentType: cachedResult.contentType,
+            trackMeta: metadata,
+          });
+          return;
+        }
+      }
+
       setError('No se pudo obtener el stream');
       setStatus('error');
       throw new Error('missing_stream');
@@ -248,23 +286,44 @@ export const PlayerProvider = ({ children }) => {
     revokeObjectUrl();
     audio.pause();
     audio.src = directUrl;
-    audio.type = response.content_type || '';
+    audio.type = response.content_type || 'audio/mp4';
+    audio.load();
     metadata.source = response.source || 'stream';
     metadata.contentType = response.content_type;
-    setCurrentTrack(metadata);
+    setCurrentTrack({ ...metadata });
 
     try {
       await audio.play();
     } catch (streamError) {
-      setError('No se pudo iniciar la reproducción');
-      setStatus('error');
+      console.warn('Error al iniciar streaming directo, intentando esperar caché', streamError);
+      if (cacheKey) {
+        const cachedResult = await waitForCachedBlob(cacheKey, response.content_type);
+        if (!ensureActive()) {
+          return;
+        }
+        if (cachedResult) {
+          metadata.source = 'cache';
+          metadata.contentType = cachedResult.contentType;
+          await startPlaybackWithBlob({
+            blob: cachedResult.blob,
+            contentType: cachedResult.contentType,
+            trackMeta: metadata,
+          });
+          return;
+        }
+      }
+
+      if (ensureActive()) {
+        setError('No se pudo iniciar la reproducción');
+        setStatus('error');
+      }
       throw streamError;
     }
 
     if (cacheKey) {
       waitForCachedBlob(cacheKey, response.content_type)
         .then((cachedResult) => {
-          if (!cachedResult) return;
+          if (!cachedResult || !ensureActive()) return;
           setCurrentTrack((prev) => {
             if (prev && prev.cacheKey === cacheKey) {
               return {
