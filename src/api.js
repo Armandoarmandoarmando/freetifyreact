@@ -66,3 +66,45 @@ export async function getUserTopArtists(accessToken, timeRange = 'medium_term', 
   if (!res.ok) throw new Error("Error al obtener top artists del usuario");
   return res.json();
 }
+
+export async function requestTrackStream({
+  trackName,
+  artists = [],
+  album,
+  spotifyTrackId,
+  youtubeQueryOverride,
+  durationMs,
+}) {
+  const res = await fetch(`${API_URL}/streams/track`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      track_name: trackName,
+      artists,
+      album,
+      spotify_track_id: spotifyTrackId,
+      youtube_query_override: youtubeQueryOverride,
+      duration_ms: durationMs,
+    }),
+  });
+
+  if (!res.ok) {
+    const message = await res.text();
+    throw new Error(message || 'Error al iniciar el stream');
+  }
+
+  return res.json();
+}
+
+export async function fetchCachedTrack(cacheKey) {
+  const res = await fetch(`${API_URL}/streams/cache/${cacheKey}`);
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    throw new Error('Track no disponible en caché');
+  }
+  return res;
+}

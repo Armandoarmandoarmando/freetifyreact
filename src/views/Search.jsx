@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { searchContent } from '../api';
 import gsap from 'gsap';
-import 'bootstrap-icons/font/bootstrap-icons.css';
+import { usePlayer } from '../contexts/PlayerContext';
 
 const Search = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -14,6 +14,45 @@ const Search = () => {
     'Hip Hop Clásico',
     'Electrónica'
   ]);
+  const { playTrack, currentTrack, status, pause, resume } = usePlayer();
+
+  const isCurrentTrack = (item) => {
+    if (!currentTrack) return false;
+    if (item.spotify_track_id && currentTrack.spotifyTrackId) {
+      return currentTrack.spotifyTrackId === item.spotify_track_id;
+    }
+    return currentTrack.title === item.nombre && (currentTrack.artists || []).includes(item.artista);
+  };
+
+  const handlePlaySong = (item) => {
+    playTrack({
+      nombre: item.nombre,
+      artistas: item.artistas || (item.artista ? [item.artista] : []),
+      album: item.album,
+      imagen: item.imagen,
+      spotify_track_id: item.spotify_track_id,
+      duration_ms: item.duracion ? Math.round(item.duracion * 1000) : undefined,
+    }).catch((err) => console.error('Error al reproducir la canción', err));
+  };
+
+  const handleCardClick = (item) => {
+    if (searchType === 'songs') {
+      if (isCurrentTrack(item)) {
+        if (status === 'playing') {
+          pause();
+        } else {
+          resume();
+        }
+      } else {
+        handlePlaySong(item);
+      }
+      return;
+    }
+
+    if (item.url) {
+      window.open(item.url, '_blank');
+    }
+  };
 
   const categories = [
     { name: 'Podcasts', color: '#E13300', icon: 'bi bi-mic' },
@@ -298,82 +337,142 @@ const Search = () => {
                 gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
                 gap: '20px'
               }}>
-                {searchResults.map((item, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      backgroundColor: '#242424',
-                      borderRadius: '8px',
-                      padding: '16px',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.backgroundColor = '#323232';
-                      e.target.style.transform = 'translateY(-4px)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = '#242424';
-                      e.target.style.transform = 'translateY(0)';
-                    }}
-                    onClick={() => item.url && window.open(item.url, '_blank')}
-                  >
-                    <div style={{
-                      width: '100%',
-                      aspectRatio: '1',
-                      borderRadius: '4px',
-                      marginBottom: '12px',
-                      overflow: 'hidden',
-                      position: 'relative'
-                    }}>
-                      {item.imagen ? (
-                        <img 
-                          src={item.imagen} 
-                          alt={item.nombre || item.artista}
-                          style={{
+                {searchResults.map((item, index) => {
+                  const current = isCurrentTrack(item);
+                  const isSong = searchType === 'songs';
+                  const isPlayingCurrent = current && status === 'playing';
+
+                  return (
+                    <div
+                      key={`${item.spotify_track_id || item.nombre}-${index}`}
+                      style={{
+                        backgroundColor: '#242424',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#323232';
+                        e.currentTarget.style.transform = 'translateY(-4px)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#242424';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }}
+                      onClick={() => handleCardClick(item)}
+                    >
+                      <div style={{
+                        width: '100%',
+                        aspectRatio: '1',
+                        borderRadius: '4px',
+                        marginBottom: '12px',
+                        overflow: 'hidden',
+                        position: 'relative'
+                      }}>
+                        {item.imagen ? (
+                          <img
+                            src={item.imagen}
+                            alt={item.nombre || item.artista}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover'
+                            }}
+                          />
+                        ) : (
+                          <div style={{
                             width: '100%',
                             height: '100%',
-                            objectFit: 'cover'
-                          }}
-                        />
-                      ) : (
-                        <div style={{
-                          width: '100%',
-                          height: '100%',
-                          backgroundColor: '#333',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <i className={`bi ${searchType === 'songs' ? 'bi-music-note' : 'bi-person'}`} 
-                             style={{ fontSize: '2rem', color: '#1DB954' }}></i>
-                        </div>
-                      )}
-                    </div>
-                    <h3 style={{
-                      fontSize: '1rem',
-                      fontWeight: '600',
-                      marginBottom: '4px',
-                      color: 'white',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {item.nombre}
-                    </h3>
-                    {searchType === 'songs' && item.artista && (
-                      <p style={{
-                        fontSize: '0.875rem',
-                        color: '#b3b3b3',
+                            backgroundColor: '#333',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <i className={`bi ${isSong ? 'bi-music-note' : 'bi-person'}`}
+                               style={{ fontSize: '2rem', color: '#1DB954' }}></i>
+                          </div>
+                        )}
+                        {isSong && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (current) {
+                                if (status === 'playing') {
+                                  pause();
+                                } else {
+                                  resume();
+                                }
+                              } else {
+                                handlePlaySong(item);
+                              }
+                            }}
+                            style={{
+                              position: 'absolute',
+                              right: '12px',
+                              bottom: '12px',
+                              width: '48px',
+                              height: '48px',
+                              borderRadius: '50%',
+                              border: 'none',
+                              backgroundColor: 'rgba(29,185,84,0.9)',
+                              color: '#fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '1.4rem',
+                              cursor: 'pointer',
+                              boxShadow: current ? '0 8px 20px rgba(29,185,84,0.4)' : '0 4px 12px rgba(0,0,0,0.3)',
+                              transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.05)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                            }}
+                          >
+                            {isPlayingCurrent ? <i className="bi bi-pause-fill"></i> : <i className="bi bi-play-fill" style={{ paddingLeft: '3px' }}></i>}
+                          </button>
+                        )}
+                      </div>
+                      <h3 style={{
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        marginBottom: '4px',
+                        color: 'white',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap'
                       }}>
-                        {item.artista}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                        {item.nombre}
+                      </h3>
+                      {isSong && item.artista && (
+                        <p style={{
+                          fontSize: '0.875rem',
+                          color: current ? '#1DB954' : '#b3b3b3',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {item.artista}
+                        </p>
+                      )}
+                      {current && (
+                        <div style={{
+                          marginTop: '8px',
+                          fontSize: '0.75rem',
+                          color: '#1DB954',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em'
+                        }}>
+                          {status === 'playing' ? 'Reproduciendo' : status === 'paused' ? 'Pausado' : 'Cargando'}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : (

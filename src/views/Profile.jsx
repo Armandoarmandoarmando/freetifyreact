@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserProfile, getUserTopTracks, getUserTopArtists } from '../api';
 import gsap from 'gsap';
+import { usePlayer } from '../contexts/PlayerContext';
 
 const Profile = () => {
   const [profileData, setProfileData] = useState(null);
@@ -12,6 +13,7 @@ const Profile = () => {
   const [error, setError] = useState('');
   const { accessToken, user } = useAuth();
   const containerRef = useRef(null);
+  const { playTrack, currentTrack, status, pause, resume } = usePlayer();
 
   const timeRangeOptions = [
     { value: 'short_term', label: 'Último mes' },
@@ -54,6 +56,29 @@ const Profile = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const isCurrentTopTrack = (trackId) => currentTrack?.spotifyTrackId === trackId;
+
+  const handleTopTrackClick = (track) => {
+    if (!track) return;
+    if (isCurrentTopTrack(track.id)) {
+      if (status === 'playing') {
+        pause();
+      } else {
+        resume();
+      }
+      return;
+    }
+
+    playTrack({
+      nombre: track.name,
+      artistas: track.artists?.map((artist) => artist.name) || [],
+      album: track.album?.name,
+      imagen: track.album?.images?.[0]?.url,
+      spotify_track_id: track.id,
+      duration_ms: track.duration_ms,
+    }).catch((err) => console.error('Error al reproducir track', err));
   };
 
   if (loading) {
@@ -223,7 +248,10 @@ const Profile = () => {
             Tus canciones favoritas
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {topTracks.map((track, index) => (
+            {topTracks.map((track, index) => {
+              const isCurrent = isCurrentTopTrack(track.id);
+              const isPlaying = isCurrent && status === 'playing';
+              return (
               <div
                 key={track.id}
                 style={{
@@ -232,15 +260,16 @@ const Profile = () => {
                   gap: '15px',
                   padding: '12px',
                   borderRadius: '8px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  backgroundColor: isCurrent ? 'rgba(29, 185, 84, 0.15)' : 'rgba(255, 255, 255, 0.05)',
                   transition: 'background-color 0.3s ease',
                   cursor: 'pointer'
                 }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
+                onMouseEnter={(e) => e.target.style.backgroundColor = isCurrent ? 'rgba(29, 185, 84, 0.2)' : 'rgba(255, 255, 255, 0.1)'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = isCurrent ? 'rgba(29, 185, 84, 0.15)' : 'rgba(255, 255, 255, 0.05)'}
+                onClick={() => handleTopTrackClick(track)}
               >
                 <span style={{
-                  color: '#1DB954',
+                  color: isCurrent ? '#1DB954' : '#1DB954',
                   fontWeight: 'bold',
                   fontSize: '1.1rem',
                   width: '25px'
@@ -260,11 +289,15 @@ const Profile = () => {
                     {track.artists?.map(artist => artist.name).join(', ')}
                   </div>
                 </div>
-                <div style={{ color: '#b3b3b3', fontSize: '0.8rem' }}>
+                <div style={{ color: isCurrent ? '#1DB954' : '#b3b3b3', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {isCurrent && (
+                    <i className={`bi ${isPlaying ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'}`} style={{ fontSize: '1rem', color: '#1DB954' }}></i>
+                  )}
                   {Math.floor(track.popularity)}% popularidad
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
 

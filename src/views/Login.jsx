@@ -13,6 +13,7 @@ const Login = () => {
   const containerRef = useRef(null);
   const formRef = useRef(null);
   const { login, isAuthenticated } = useAuth();
+  const [requestedScopes, setRequestedScopes] = useState([]);
 
   // Redirigir si ya está autenticado
   useEffect(() => {
@@ -39,7 +40,7 @@ const Login = () => {
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
       const tl = gsap.timeline();
-      
+
       tl.fromTo(containerRef.current, 
         { opacity: 0 },
         { opacity: 1, duration: 0.5, ease: "power2.out" }
@@ -52,6 +53,29 @@ const Login = () => {
     }, containerRef);
 
     return () => ctx.revert();
+  }, []);
+
+  useEffect(() => {
+    const loadScopes = async () => {
+      try {
+        const response = await fetch(`${API_URL}/auth/debug`);
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        if (data?.scopes) {
+          setRequestedScopes(
+            data.scopes
+              .split(/\s+/)
+              .filter(Boolean)
+          );
+        }
+      } catch (err) {
+        console.warn('No se pudieron cargar los scopes de Spotify', err);
+      }
+    };
+
+    loadScopes();
   }, []);
 
   const handleSpotifyLogin = async () => {
@@ -166,6 +190,42 @@ const Login = () => {
             Accede a tu música, playlists y más con tu cuenta de Spotify
           </p>
         </div>
+
+        {requestedScopes.length > 0 && (
+          <div style={{
+            width: '100%',
+            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+            borderRadius: '16px',
+            padding: '1rem 1.25rem',
+            color: '#d9d9d9'
+          }}>
+            <p style={{
+              margin: '0 0 0.5rem 0',
+              fontWeight: 500,
+              fontSize: '0.95rem'
+            }}>
+              Permisos solicitados para habilitar tus favoritos, biblioteca y seguimiento:
+            </p>
+            <ul style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: 0,
+              display: 'grid',
+              gap: '0.35rem'
+            }}>
+              {requestedScopes.map((scope) => (
+                <li key={scope} style={{
+                  fontSize: '0.85rem',
+                  backgroundColor: 'rgba(0, 0, 0, 0.25)',
+                  borderRadius: '12px',
+                  padding: '0.45rem 0.75rem'
+                }}>
+                  {scope}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Error Message */}
         {error && (

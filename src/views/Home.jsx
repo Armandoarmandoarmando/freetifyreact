@@ -1,9 +1,9 @@
 import { useState, useRef, useLayoutEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
-import 'bootstrap-icons/font/bootstrap-icons.css';
 import { useAuth } from '../contexts/AuthContext';
 import LoginPrompt from '../components/LoginPrompt';
+import PlayerBar from '../components/PlayerBar';
 
 const Home = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
@@ -360,7 +360,8 @@ const Home = () => {
         padding: '20px',
         overflowY: 'auto',
         backgroundColor: '#121212',
-        color: 'white'
+        color: 'white',
+        paddingBottom: '180px'
       }}>
         <Outlet />
       </main>
@@ -372,6 +373,8 @@ const Home = () => {
           onClose={() => setShowLoginPrompt(false)}
         />
       )}
+
+      <PlayerBar />
     </div>
   );
 };
