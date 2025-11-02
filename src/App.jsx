@@ -92,8 +92,11 @@ function App() {
 
   useEffect(() => {
     fetchData()
-      .then(data => setMessage(data.message))
-      .catch(err => setMessage("Error al conectar con el backend"));
+      .then((data) => setMessage(data.message))
+      .catch((error) => {
+        console.error('Error al conectar con el backend', error);
+        setMessage('Error al conectar con el backend');
+      });
   }, []);
 
   const handleGuestAccess = () => {

@@ -1,7 +1,17 @@
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserPlaylists, getPlaylistDetails } from '../api';
 import gsap from 'gsap';
+import { usePlayer } from '../contexts/PlayerContext';
+
+const shuffleTracks = (items) => {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+};
 
 const Playlists = () => {
   const [playlists, setPlaylists] = useState([]);
@@ -11,24 +21,31 @@ const Playlists = () => {
   const { accessToken } = useAuth();
   const containerRef = useRef(null);
 
+  const {
+    playTrack,
+    setQueue,
+    setShuffle,
+    enqueueTracks,
+    isShuffle,
+    currentTrack,
+    status,
+    repeatMode,
+    cycleRepeatMode,
+    setRepeatMode,
+  } = usePlayer();
+
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
       gsap.fromTo(containerRef.current,
         { opacity: 0, y: 20 },
-        { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }
+        { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' },
       );
     }, containerRef);
 
     return () => ctx.revert();
   }, []);
 
-  useEffect(() => {
-    if (accessToken) {
-      fetchPlaylists();
-    }
-  }, [accessToken]);
-
-  const fetchPlaylists = async () => {
+  const fetchPlaylists = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getUserPlaylists(accessToken, 50);
@@ -39,9 +56,9 @@ const Playlists = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken]);
 
-  const fetchPlaylistDetails = async (playlistId) => {
+  const fetchPlaylistDetails = useCallback(async (playlistId) => {
     try {
       const data = await getPlaylistDetails(playlistId, accessToken);
       setSelectedPlaylist(data);
@@ -49,6 +66,72 @@ const Playlists = () => {
       setError('Error al cargar detalles de la playlist');
       console.error('Error fetching playlist details:', err);
     }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (accessToken) {
+      fetchPlaylists();
+    }
+  }, [accessToken, fetchPlaylists]);
+
+  const playlistTracks = useMemo(() => {
+    if (!selectedPlaylist?.tracks?.items) return [];
+    return selectedPlaylist.tracks.items
+      .map((item) => item.track)
+      .filter(Boolean)
+      .map((track) => ({
+        nombre: track.name,
+        artistas: track.artists?.map((artist) => artist.name) || [],
+        album: track.album?.name,
+        imagen: track.album?.images?.[0]?.url,
+        spotify_track_id: track.id,
+        duration_ms: track.duration_ms,
+        duracion: track.duration_ms ? track.duration_ms / 1000 : undefined,
+      }));
+  }, [selectedPlaylist]);
+
+  const beginPlaylistPlayback = (orderedTracks, startIndex = 0, { shuffle } = {}) => {
+    if (!orderedTracks.length) return;
+    const safeIndex = Math.max(0, Math.min(startIndex, orderedTracks.length - 1));
+    const firstTrack = orderedTracks[safeIndex];
+    if (!firstTrack) return;
+
+    setShuffle(Boolean(shuffle));
+    setRepeatMode('off');
+    playTrack(firstTrack, { maintainQueue: false }).catch((err) => console.error('No se pudo iniciar la playlist', err));
+    setTimeout(() => {
+      setQueue(orderedTracks, safeIndex);
+    }, 0);
+  };
+
+  const handlePlayPlaylist = () => {
+    if (!playlistTracks.length) return;
+    beginPlaylistPlayback(playlistTracks, 0, { shuffle: false });
+  };
+
+  const handleShufflePlaylist = () => {
+    if (!playlistTracks.length) return;
+    const shuffled = shuffleTracks(playlistTracks);
+    beginPlaylistPlayback(shuffled, 0, { shuffle: true });
+  };
+
+  const handleTrackClick = (track, index) => {
+    if (!track || !playlistTracks.length) return;
+    beginPlaylistPlayback(playlistTracks, index, { shuffle: false });
+  };
+
+  const isTrackSelected = (trackId) => currentTrack?.spotifyTrackId === trackId;
+
+  const repeatLabels = {
+    off: 'Sin repetición',
+    queue: 'Repetir lista',
+    track: 'Repetir canción',
+  };
+
+  const repeatIcons = {
+    off: 'bi bi-arrow-repeat',
+    queue: 'bi bi-repeat',
+    track: 'bi bi-repeat-1',
   };
 
   if (loading) {
@@ -59,7 +142,7 @@ const Playlists = () => {
         alignItems: 'center',
         height: '400px',
         flexDirection: 'column',
-        gap: '20px'
+        gap: '20px',
       }}>
         <div style={{
           width: '50px',
@@ -67,7 +150,7 @@ const Playlists = () => {
           border: '4px solid rgba(29, 185, 84, 0.3)',
           borderTop: '4px solid #1DB954',
           borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
+          animation: 'spin 1s linear infinite',
         }} />
         <p style={{ color: '#b3b3b3' }}>Cargando tus playlists...</p>
         <style jsx>{`
@@ -88,11 +171,12 @@ const Playlists = () => {
         alignItems: 'center',
         height: '400px',
         flexDirection: 'column',
-        gap: '20px'
+        gap: '20px',
       }}>
-        <i className="bi bi-exclamation-triangle" style={{ fontSize: '3rem', color: '#dc3545' }}></i>
+        <i className="bi bi-exclamation-triangle" style={{ fontSize: '3rem', color: '#dc3545' }} />
         <p style={{ color: '#dc3545', textAlign: 'center' }}>{error}</p>
         <button
+          type="button"
           onClick={fetchPlaylists}
           style={{
             backgroundColor: '#1DB954',
@@ -100,7 +184,7 @@ const Playlists = () => {
             border: 'none',
             borderRadius: '25px',
             padding: '10px 20px',
-            cursor: 'pointer'
+            cursor: 'pointer',
           }}
         >
           Reintentar
@@ -119,9 +203,9 @@ const Playlists = () => {
           margin: '0 0 10px 0',
           display: 'flex',
           alignItems: 'center',
-          gap: '15px'
+          gap: '15px',
         }}>
-          <i className="bi bi-music-note-list" style={{ color: '#1DB954' }}></i>
+          <i className="bi bi-music-note-list" style={{ color: '#1DB954' }} />
           Tus Playlists
         </h1>
         <p style={{ color: '#b3b3b3', margin: 0 }}>
@@ -130,57 +214,110 @@ const Playlists = () => {
       </header>
 
       {selectedPlaylist ? (
-        <div>
-          <button
-            onClick={() => setSelectedPlaylist(null)}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+      <button
+        type="button"
+        onClick={() => setSelectedPlaylist(null)}
             style={{
+              alignSelf: 'flex-start',
               backgroundColor: 'transparent',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              color: '#b3b3b3',
-              padding: '8px 16px',
-              borderRadius: '20px',
+              border: 'none',
+              color: '#1DB954',
               cursor: 'pointer',
-              marginBottom: '20px',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '8px',
+              fontWeight: '600',
             }}
           >
-            <i className="bi bi-arrow-left"></i>
-            Volver a playlists
+            <i className="bi bi-arrow-left" /> Volver a playlists
           </button>
 
-          <div style={{
-            background: 'linear-gradient(180deg, rgba(29, 185, 84, 0.2) 0%, rgba(18, 18, 18, 0.8) 100%)',
-            borderRadius: '12px',
-            padding: '30px',
-            marginBottom: '30px'
-          }}>
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-              <img
-                src={selectedPlaylist.images?.[0]?.url || '/placeholder-playlist.png'}
-                alt={selectedPlaylist.name}
-                style={{
-                  width: '200px',
-                  height: '200px',
-                  borderRadius: '8px',
-                  objectFit: 'cover'
-                }}
-              />
-              <div>
-                <h2 style={{ color: 'white', fontSize: '2rem', margin: '0 0 10px 0' }}>
-                  {selectedPlaylist.name}
-                </h2>
-                <p style={{ color: '#b3b3b3', margin: '0 0 15px 0' }}>
-                  {selectedPlaylist.description}
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', color: '#b3b3b3', fontSize: '0.9rem' }}>
-                  <span>{selectedPlaylist.owner?.display_name}</span>
-                  <span>•</span>
-                  <span>{selectedPlaylist.tracks?.total} canciones</span>
-                  <span>•</span>
-                  <span>{selectedPlaylist.followers?.total} seguidores</span>
-                </div>
+          <div style={{ display: 'flex', gap: '30px', alignItems: 'center' }}>
+            <img
+              src={selectedPlaylist.images?.[0]?.url || '/placeholder-playlist.png'}
+              alt={selectedPlaylist.name}
+              style={{ width: '220px', height: '220px', borderRadius: '12px', objectFit: 'cover' }}
+            />
+            <div style={{ flex: 1 }}>
+              <p style={{ color: '#b3b3b3', textTransform: 'uppercase', letterSpacing: '2px', fontSize: '0.9rem' }}>
+                Playlist
+              </p>
+              <h2 style={{ color: 'white', fontSize: '2.5rem', margin: '0 0 10px 0' }}>
+                {selectedPlaylist.name}
+              </h2>
+              <p style={{ color: '#b3b3b3', maxWidth: '600px', marginBottom: '15px' }}>
+                {selectedPlaylist.description || 'Playlist sin descripción.'}
+              </p>
+              <div style={{ color: '#b3b3b3', display: 'flex', gap: '10px', flexWrap: 'wrap', fontSize: '0.95rem' }}>
+                <span>{selectedPlaylist.owner?.display_name}</span>
+                <span>•</span>
+                <span>{selectedPlaylist.tracks?.total} canciones</span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={handlePlayPlaylist}
+                  disabled={!playlistTracks.length}
+                  style={{
+                    backgroundColor: '#1DB954',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '999px',
+                    padding: '12px 24px',
+                    fontWeight: '600',
+                    cursor: playlistTracks.length ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <i className="bi bi-play-fill" />
+                  Reproducir
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleShufflePlaylist}
+                  disabled={!playlistTracks.length}
+                  style={{
+                    backgroundColor: isShuffle ? '#1DB954' : 'rgba(255, 255, 255, 0.1)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '999px',
+                    padding: '12px 24px',
+                    fontWeight: '600',
+                    cursor: playlistTracks.length ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <i className="bi bi-shuffle" />
+                  Reproducir aleatorio
+                </button>
+
+                <button
+                  type="button"
+                  onClick={cycleRepeatMode}
+                  style={{
+                    backgroundColor: repeatMode === 'off' ? 'rgba(255, 255, 255, 0.1)' : '#1DB954',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '999px',
+                    padding: '12px 24px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                  title={repeatLabels[repeatMode]}
+                >
+                  <i className={repeatIcons[repeatMode]} />
+                  {repeatLabels[repeatMode]}
+                </button>
               </div>
             </div>
           </div>
@@ -188,42 +325,96 @@ const Playlists = () => {
           <div>
             <h3 style={{ color: 'white', marginBottom: '20px' }}>Canciones</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {selectedPlaylist.tracks?.items?.slice(0, 20).map((item, index) => (
+              {playlistTracks.map((track, index) => (
                 <div
-                  key={item.track?.id || index}
+                  key={`${track.spotify_track_id || track.nombre || 'track'}-${index}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleTrackClick(track, index)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleTrackClick(track, index);
+                    }
+                  }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '15px',
                     padding: '10px',
                     borderRadius: '8px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    transition: 'background-color 0.3s ease'
+                    backgroundColor: isTrackSelected(track.spotify_track_id) ? 'rgba(29, 185, 84, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                    transition: 'background-color 0.3s ease',
+                    cursor: 'pointer',
+                    border: '1px solid transparent',
                   }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = isTrackSelected(track.spotify_track_id)
+                      ? 'rgba(29, 185, 84, 0.35)'
+                      : 'rgba(255, 255, 255, 0.08)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = isTrackSelected(track.spotify_track_id)
+                      ? 'rgba(29, 185, 84, 0.25)'
+                      : 'rgba(255, 255, 255, 0.05)';
+                  }}
                 >
                   <span style={{ color: '#b3b3b3', width: '20px', fontSize: '0.9rem' }}>
                     {index + 1}
                   </span>
                   <img
-                    src={item.track?.album?.images?.[2]?.url || '/placeholder-song.png'}
-                    alt={item.track?.name}
-                    style={{ width: '40px', height: '40px', borderRadius: '4px' }}
+                    src={track.imagen || '/placeholder-song.png'}
+                    alt={track.nombre}
+                    style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }}
                   />
                   <div style={{ flex: 1 }}>
                     <div style={{ color: 'white', fontWeight: '500' }}>
-                      {item.track?.name}
+                      {track.nombre}
+                      {isTrackSelected(track.spotify_track_id) && status === 'playing' && (
+                        <span style={{ marginLeft: '8px', color: '#1DB954', fontSize: '0.8rem' }}>
+                          Reproduciendo
+                        </span>
+                      )}
                     </div>
                     <div style={{ color: '#b3b3b3', fontSize: '0.9rem' }}>
-                      {item.track?.artists?.map(artist => artist.name).join(', ')}
+                      {track.artistas.join(', ')}
                     </div>
                   </div>
                   <div style={{ color: '#b3b3b3', fontSize: '0.9rem' }}>
-                    {item.track?.album?.name}
+                    {track.album}
                   </div>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      enqueueTracks(track);
+                    }}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      border: 'none',
+                      backgroundColor: 'rgba(29,185,84,0.15)',
+                      color: '#1DB954',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s ease',
+                    }}
+                    aria-label="Añadir a la cola"
+                    title="Añadir a la cola"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.15)';
+                    }}
+                  >
+                    <i className="bi bi-plus" style={{ fontSize: '1rem' }}></i>
+                  </button>
                   <div style={{ color: '#b3b3b3', fontSize: '0.9rem', width: '50px', textAlign: 'right' }}>
-                    {Math.floor(item.track?.duration_ms / 60000)}:{String(Math.floor((item.track?.duration_ms % 60000) / 1000)).padStart(2, '0')}
+                    {Math.floor((track.duration_ms || 0) / 60000)}:{String(Math.floor(((track.duration_ms || 0) % 60000) / 1000)).padStart(2, '0')}
                   </div>
                 </div>
               ))}
@@ -234,7 +425,7 @@ const Playlists = () => {
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-          gap: '20px'
+          gap: '20px',
         }}>
           {playlists.map((playlist) => (
             <div
@@ -246,17 +437,17 @@ const Playlists = () => {
                 padding: '20px',
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
-                border: '1px solid transparent'
+                border: '1px solid transparent',
               }}
               onMouseEnter={(e) => {
-                e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                e.target.style.transform = 'translateY(-4px)';
-                e.target.style.borderColor = 'rgba(29, 185, 84, 0.3)';
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.borderColor = 'rgba(29, 185, 84, 0.3)';
               }}
               onMouseLeave={(e) => {
-                e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.borderColor = 'transparent';
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.borderColor = 'transparent';
               }}
             >
               <img
@@ -267,7 +458,7 @@ const Playlists = () => {
                   height: '160px',
                   borderRadius: '8px',
                   objectFit: 'cover',
-                  marginBottom: '15px'
+                  marginBottom: '15px',
                 }}
               />
               <h3 style={{
@@ -277,7 +468,7 @@ const Playlists = () => {
                 margin: '0 0 8px 0',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
               }}>
                 {playlist.name}
               </h3>
@@ -287,7 +478,7 @@ const Playlists = () => {
                 margin: '0 0 10px 0',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
               }}>
                 {playlist.description || `De ${playlist.owner?.display_name}`}
               </p>
@@ -296,10 +487,10 @@ const Playlists = () => {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 color: '#b3b3b3',
-                fontSize: '0.8rem'
+                fontSize: '0.8rem',
               }}>
                 <span>{playlist.tracks?.total} canciones</span>
-                <i className="bi bi-play-circle" style={{ fontSize: '1.2rem', color: '#1DB954' }}></i>
+                <i className="bi bi-play-circle" style={{ fontSize: '1.2rem', color: '#1DB954' }} />
               </div>
             </div>
           ))}

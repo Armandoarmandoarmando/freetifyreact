@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { searchContent } from '../api';
 import gsap from 'gsap';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -14,7 +14,16 @@ const Search = () => {
     'Hip Hop Clásico',
     'Electrónica'
   ]);
-  const { playTrack, currentTrack, status, pause, resume } = usePlayer();
+  const { playTrack, enqueueTracks, currentTrack, status, pause, resume } = usePlayer();
+
+  const buildTrackPayload = (item) => ({
+    nombre: item.nombre,
+    artistas: item.artistas || (item.artista ? [item.artista] : []),
+    album: item.album,
+    imagen: item.imagen,
+    spotify_track_id: item.spotify_track_id,
+    duration_ms: item.duration_ms ?? (item.duracion ? Math.round(item.duracion * 1000) : undefined),
+  });
 
   const isCurrentTrack = (item) => {
     if (!currentTrack) return false;
@@ -25,14 +34,11 @@ const Search = () => {
   };
 
   const handlePlaySong = (item) => {
-    playTrack({
-      nombre: item.nombre,
-      artistas: item.artistas || (item.artista ? [item.artista] : []),
-      album: item.album,
-      imagen: item.imagen,
-      spotify_track_id: item.spotify_track_id,
-      duration_ms: item.duracion ? Math.round(item.duracion * 1000) : undefined,
-    }).catch((err) => console.error('Error al reproducir la canción', err));
+    playTrack(buildTrackPayload(item)).catch((err) => console.error('Error al reproducir la canción', err));
+  };
+
+  const handleAddToQueue = (item) => {
+    enqueueTracks(buildTrackPayload(item));
   };
 
   const handleCardClick = (item) => {
@@ -83,9 +89,9 @@ const Search = () => {
       ease: 'power2.out'
     });
   }, []);
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
-    
+
     setIsLoading(true);
     try {
       const response = await searchContent(searchQuery, searchType);
@@ -96,7 +102,7 @@ const Search = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [searchQuery, searchType]);
 
   useEffect(() => {
     if (searchQuery.trim()) {
@@ -107,7 +113,7 @@ const Search = () => {
     } else {
       setSearchResults([]);
     }
-  }, [searchQuery, searchType]);
+  }, [searchQuery, searchType, handleSearch]);
 
   return (
     <div className="search-container" style={{
@@ -214,7 +220,7 @@ const Search = () => {
                   key={index}
                   onClick={() => {
                     setSearchQuery(search);
-                    handleSearch();
+                    setSearchType('songs');
                   }}
                   style={{
                     padding: '8px 16px',
@@ -459,17 +465,50 @@ const Search = () => {
                           {item.artista}
                         </p>
                       )}
-                      {current && (
-                        <div style={{
-                          marginTop: '8px',
-                          fontSize: '0.75rem',
-                          color: '#1DB954',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em'
-                        }}>
-                          {status === 'playing' ? 'Reproduciendo' : status === 'paused' ? 'Pausado' : 'Cargando'}
-                        </div>
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
+                        {current && (
+                          <div style={{
+                            fontSize: '0.75rem',
+                            color: '#1DB954',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em'
+                          }}>
+                            {status === 'playing' ? 'Reproduciendo' : status === 'paused' ? 'Pausado' : 'Cargando'}
+                          </div>
+                        )}
+                        {isSong && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleAddToQueue(item);
+                            }}
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '50%',
+                              border: 'none',
+                              backgroundColor: 'rgba(29,185,84,0.2)',
+                              color: '#1DB954',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s ease',
+                            }}
+                            aria-label="Añadir a la cola"
+                            title="Añadir a la cola"
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.35)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.2)';
+                            }}
+                          >
+                            <i className="bi bi-plus" style={{ fontSize: '1rem' }}></i>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

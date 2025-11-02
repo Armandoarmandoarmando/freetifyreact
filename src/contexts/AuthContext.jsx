@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 
+/* eslint-disable react-refresh/only-export-components */
 const AuthContext = createContext();
 
 export const useAuth = () => {
@@ -68,7 +69,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('guest_mode');
   };
 
-  const requireAuth = (action) => {
+  const requireAuth = () => {
     if (!isAuthenticated) {
       return {
         allowed: false,

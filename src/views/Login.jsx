@@ -12,7 +12,7 @@ const Login = () => {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const formRef = useRef(null);
-  const { login, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [requestedScopes, setRequestedScopes] = useState([]);
 
   // Redirigir si ya está autenticado

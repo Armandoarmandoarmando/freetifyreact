@@ -108,3 +108,22 @@ export async function fetchCachedTrack(cacheKey) {
   }
   return res;
 }
+
+export async function fetchRecommendations(trackId, limit = 10) {
+  if (!trackId) {
+    throw new Error('trackId es requerido para obtener recomendaciones');
+  }
+
+  const params = new URLSearchParams({ track_id: trackId });
+  if (limit) {
+    params.set('limit', String(limit));
+  }
+
+  const res = await fetch(`${API_URL}/freetify/recomendaciones?${params.toString()}`);
+  if (!res.ok) {
+    const message = await res.text();
+    throw new Error(message || 'Error al obtener recomendaciones');
+  }
+
+  return res.json();
+}

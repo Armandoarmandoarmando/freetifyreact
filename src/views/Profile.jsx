@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserProfile, getUserTopTracks, getUserTopArtists } from '../api';
 import gsap from 'gsap';
@@ -13,7 +13,7 @@ const Profile = () => {
   const [error, setError] = useState('');
   const { accessToken, user } = useAuth();
   const containerRef = useRef(null);
-  const { playTrack, currentTrack, status, pause, resume } = usePlayer();
+  const { playTrack, enqueueTracks, currentTrack, status, pause, resume } = usePlayer();
 
   const timeRangeOptions = [
     { value: 'short_term', label: 'Último mes' },
@@ -32,13 +32,7 @@ const Profile = () => {
     return () => ctx.revert();
   }, []);
 
-  useEffect(() => {
-    if (accessToken) {
-      fetchAllData();
-    }
-  }, [accessToken, timeRange]);
-
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
       const [profile, tracks, artists] = await Promise.all([
@@ -56,9 +50,24 @@ const Profile = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken, timeRange]);
+
+  useEffect(() => {
+    if (accessToken) {
+      fetchAllData();
+    }
+  }, [accessToken, timeRange, fetchAllData]);
 
   const isCurrentTopTrack = (trackId) => currentTrack?.spotifyTrackId === trackId;
+
+  const mapTopTrackToPayload = (track) => ({
+    nombre: track.name,
+    artistas: track.artists?.map((artist) => artist.name) || [],
+    album: track.album?.name,
+    imagen: track.album?.images?.[0]?.url,
+    spotify_track_id: track.id,
+    duration_ms: track.duration_ms,
+  });
 
   const handleTopTrackClick = (track) => {
     if (!track) return;
@@ -71,14 +80,12 @@ const Profile = () => {
       return;
     }
 
-    playTrack({
-      nombre: track.name,
-      artistas: track.artists?.map((artist) => artist.name) || [],
-      album: track.album?.name,
-      imagen: track.album?.images?.[0]?.url,
-      spotify_track_id: track.id,
-      duration_ms: track.duration_ms,
-    }).catch((err) => console.error('Error al reproducir track', err));
+    playTrack(mapTopTrackToPayload(track)).catch((err) => console.error('Error al reproducir track', err));
+  };
+
+  const handleQueueTopTrack = (event, track) => {
+    event.stopPropagation();
+    enqueueTracks(mapTopTrackToPayload(track));
   };
 
   if (loading) {
@@ -289,11 +296,40 @@ const Profile = () => {
                     {track.artists?.map(artist => artist.name).join(', ')}
                   </div>
                 </div>
-                <div style={{ color: isCurrent ? '#1DB954' : '#b3b3b3', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {isCurrent && (
-                    <i className={`bi ${isPlaying ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'}`} style={{ fontSize: '1rem', color: '#1DB954' }}></i>
-                  )}
-                  {Math.floor(track.popularity)}% popularidad
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ color: isCurrent ? '#1DB954' : '#b3b3b3', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {isCurrent && (
+                      <i className={`bi ${isPlaying ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'}`} style={{ fontSize: '1rem', color: '#1DB954' }}></i>
+                    )}
+                    {Math.floor(track.popularity)}% popularidad
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(event) => handleQueueTopTrack(event, track)}
+                    style={{
+                      width: '30px',
+                      height: '30px',
+                      borderRadius: '50%',
+                      border: 'none',
+                      backgroundColor: 'rgba(29,185,84,0.2)',
+                      color: '#1DB954',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s ease',
+                    }}
+                    aria-label="Añadir a la cola"
+                    title="Añadir a la cola"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.35)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.2)';
+                    }}
+                  >
+                    <i className="bi bi-plus" style={{ fontSize: '1rem' }}></i>
+                  </button>
                 </div>
               </div>
             );
