@@ -13,6 +13,7 @@ const ArtistSongs = () => {
   const [artistInfo, setArtistInfo] = useState(null);
   const [topTracks, setTopTracks] = useState([]);
   const [albums, setAlbums] = useState([]);
+  const [similarArtists, setSimilarArtists] = useState([]);
   const [showAllAlbums, setShowAllAlbums] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -44,6 +45,7 @@ const ArtistSongs = () => {
         } else {
           setTopTracks(body.top_tracks || []);
           setAlbums(body.albums || []);
+          setSimilarArtists(body.similar_artists || []);
           setArtistInfo(body.artist || { name: decodedArtistName });
         }
       })
@@ -153,14 +155,6 @@ const ArtistSongs = () => {
                   Top Hits Disponibles
                 </span>
               )}
-            </div>
-          </div>
-
-          <div className="artist-tips-card">
-            <span className="artist-tips-title">Conoce lo mejor</span>
-            <div className="artist-tips-content">
-              • Escucha las {topTracks.length} canciones más populares.<br />
-              • Explora debajo toda su discografía disponible.
             </div>
           </div>
         </div>
@@ -278,6 +272,40 @@ const ArtistSongs = () => {
                     <p className="album-year">
                       {album.fecha_lanzamiento ? album.fecha_lanzamiento.substring(0, 4) : ''} • {album.album_type === 'single' ? 'Sencillo' : 'Álbum'}
                     </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Artistas Similares Section */}
+          {similarArtists.length > 0 && (
+            <div style={{ marginTop: '32px' }}>
+              <div className="artist-section-header">
+                <h2 className="artist-section-title">Artistas Similares</h2>
+              </div>
+              <div className="albums-container grid-view">
+                {similarArtists.map((artist, idx) => (
+                  <div
+                    key={`similar-${artist.id || idx}`}
+                    className="album-card"
+                    style={{ textAlign: 'center' }}
+                    onClick={() => {
+                      const encodedArtist = encodeURIComponent(artist.nombre);
+                      navigate(`/home/artist/${encodedArtist}`);
+                    }}
+                  >
+                    <div className="album-image-wrapper" style={{ borderRadius: '50%' }}>
+                      {artist.imagen ? (
+                        <img src={artist.imagen} alt={artist.nombre} style={{ borderRadius: '50%' }} />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#282828', borderRadius: '50%' }}>
+                          <i className="bi bi-person" style={{ fontSize: '3rem', color: '#555' }}></i>
+                        </div>
+                      )}
+                    </div>
+                    <h4 className="album-title" title={artist.nombre}>{artist.nombre}</h4>
+                    <p className="album-year">Artista</p>
                   </div>
                 ))}
               </div>

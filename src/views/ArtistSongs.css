@@ -19,6 +19,8 @@
 .artist-hero-content {
     display: flex;
     align-items: center;
+    justify-content: flex-start;
+    /* Changed from default to handle missing right block */
     gap: 32px;
     padding: 36px 40px;
     flex-wrap: wrap;
@@ -46,6 +48,9 @@
 .artist-hero-info {
     flex: 1;
     min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .artist-label {
@@ -72,30 +77,6 @@
     color: #cfcfcf;
     font-size: 0.9rem;
     flex-wrap: wrap;
-}
-
-.artist-tips-card {
-    min-width: 220px;
-    background: rgba(18, 18, 18, 0.65);
-    border-radius: 18px;
-    padding: 16px 20px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #e0e0e0;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.artist-tips-title {
-    font-size: 0.85rem;
-    color: #9adbb0;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.artist-tips-content {
-    font-size: 0.9rem;
-    line-height: 1.4;
 }
 
 /* --- Content Sections --- */
@@ -338,6 +319,10 @@
         padding: 30px 20px;
     }
 
+    .artist-hero-info {
+        align-items: center;
+    }
+
     .artist-hero-image-wrapper {
         width: 160px;
         height: 160px;
@@ -352,11 +337,6 @@
     .artist-stats-row {
         justify-content: center;
         text-align: center;
-    }
-
-    .artist-tips-card {
-        width: 100%;
-        text-align: left;
     }
 
     .albums-container.grid-view {
