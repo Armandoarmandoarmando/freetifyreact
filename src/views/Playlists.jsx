@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getUserPlaylists, getPlaylistDetails } from '../api';
 import gsap from 'gsap';
 import { usePlayer } from '../contexts/PlayerContext';
+import './Playlists.css';
 
 const shuffleTracks = (items) => {
   const arr = [...items];
@@ -194,303 +195,179 @@ const Playlists = () => {
   }
 
   return (
-    <div ref={containerRef} style={{ padding: '0 20px' }}>
-      <header style={{ marginBottom: '30px' }}>
-        <h1 style={{
-          color: 'white',
-          fontSize: '2.5rem',
-          fontWeight: 'bold',
-          margin: '0 0 10px 0',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '15px',
-        }}>
+    <div ref={containerRef} className="playlists-container">
+      <header className="playlists-header-title">
+        <h1>
           <i className="bi bi-music-note-list" style={{ color: '#1DB954' }} />
           Tus Playlists
         </h1>
-        <p style={{ color: '#b3b3b3', margin: 0 }}>
+        <p>
           Tienes {playlists.length} playlists en tu biblioteca
         </p>
       </header>
 
       {selectedPlaylist ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-      <button
-        type="button"
-        onClick={() => setSelectedPlaylist(null)}
-            style={{
-              alignSelf: 'flex-start',
-              backgroundColor: 'transparent',
-              border: 'none',
-              color: '#1DB954',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontWeight: '600',
-            }}
+        <div className="playlist-detail-container">
+          <button
+            type="button"
+            onClick={() => setSelectedPlaylist(null)}
+            className="back-btn"
           >
             <i className="bi bi-arrow-left" /> Volver a playlists
           </button>
 
-          <div style={{ display: 'flex', gap: '30px', alignItems: 'center' }}>
+          <div className="playlist-detail-header">
             <img
               src={selectedPlaylist.images?.[0]?.url || '/placeholder-playlist.png'}
               alt={selectedPlaylist.name}
-              style={{ width: '220px', height: '220px', borderRadius: '12px', objectFit: 'cover' }}
+              className="playlist-detail-image"
             />
-            <div style={{ flex: 1 }}>
-              <p style={{ color: '#b3b3b3', textTransform: 'uppercase', letterSpacing: '2px', fontSize: '0.9rem' }}>
-                Playlist
-              </p>
-              <h2 style={{ color: 'white', fontSize: '2.5rem', margin: '0 0 10px 0' }}>
+            <div className="playlist-detail-info">
+              <span className="playlist-type-label">Playlist public</span>
+              <h2 className="playlist-detail-title">
                 {selectedPlaylist.name}
               </h2>
-              <p style={{ color: '#b3b3b3', maxWidth: '600px', marginBottom: '15px' }}>
+              <p className="playlist-detail-desc">
                 {selectedPlaylist.description || 'Playlist sin descripción.'}
               </p>
-              <div style={{ color: '#b3b3b3', display: 'flex', gap: '10px', flexWrap: 'wrap', fontSize: '0.95rem' }}>
-                <span>{selectedPlaylist.owner?.display_name}</span>
-                <span>•</span>
+              <div className="playlist-meta">
+                {selectedPlaylist.owner?.display_name && (
+                  <>
+                    <span className="owner-avatar">
+                      <i className="bi bi-person-circle"></i>
+                    </span>
+                    <span className="owner">{selectedPlaylist.owner?.display_name}</span>
+                    <span className="separator">•</span>
+                  </>
+                )}
                 <span>{selectedPlaylist.tracks?.total} canciones</span>
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
+              <div className="playlist-actions-row">
                 <button
                   type="button"
                   onClick={handlePlayPlaylist}
                   disabled={!playlistTracks.length}
-                  style={{
-                    backgroundColor: '#1DB954',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '999px',
-                    padding: '12px 24px',
-                    fontWeight: '600',
-                    cursor: playlistTracks.length ? 'pointer' : 'not-allowed',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}
+                  className="action-btn play-primary-btn"
+                  title="Reproducir"
                 >
-                  <i className="bi bi-play-fill" />
-                  Reproducir
+                  <i className="bi bi-play-fill" style={{ paddingLeft: '4px' }} />
                 </button>
 
                 <button
                   type="button"
                   onClick={handleShufflePlaylist}
                   disabled={!playlistTracks.length}
-                  style={{
-                    backgroundColor: isShuffle ? '#1DB954' : 'rgba(255, 255, 255, 0.1)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '999px',
-                    padding: '12px 24px',
-                    fontWeight: '600',
-                    cursor: playlistTracks.length ? 'pointer' : 'not-allowed',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}
+                  className={`action-btn secondary-action-btn ${isShuffle ? 'active' : ''}`}
+                  title="Reproducir aleatorio"
                 >
                   <i className="bi bi-shuffle" />
-                  Reproducir aleatorio
                 </button>
 
                 <button
                   type="button"
                   onClick={cycleRepeatMode}
-                  style={{
-                    backgroundColor: repeatMode === 'off' ? 'rgba(255, 255, 255, 0.1)' : '#1DB954',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '999px',
-                    padding: '12px 24px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}
+                  className={`action-btn secondary-action-btn ${repeatMode !== 'off' ? 'active' : ''}`}
                   title={repeatLabels[repeatMode]}
                 >
                   <i className={repeatIcons[repeatMode]} />
-                  {repeatLabels[repeatMode]}
                 </button>
               </div>
             </div>
           </div>
 
-          <div>
-            <h3 style={{ color: 'white', marginBottom: '20px' }}>Canciones</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {playlistTracks.map((track, index) => (
-                <div
-                  key={`${track.spotify_track_id || track.nombre || 'track'}-${index}`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => handleTrackClick(track, index)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      handleTrackClick(track, index);
-                    }
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '15px',
-                    padding: '10px',
-                    borderRadius: '8px',
-                    backgroundColor: isTrackSelected(track.spotify_track_id) ? 'rgba(29, 185, 84, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                    transition: 'background-color 0.3s ease',
-                    cursor: 'pointer',
-                    border: '1px solid transparent',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = isTrackSelected(track.spotify_track_id)
-                      ? 'rgba(29, 185, 84, 0.35)'
-                      : 'rgba(255, 255, 255, 0.08)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = isTrackSelected(track.spotify_track_id)
-                      ? 'rgba(29, 185, 84, 0.25)'
-                      : 'rgba(255, 255, 255, 0.05)';
-                  }}
-                >
-                  <span style={{ color: '#b3b3b3', width: '20px', fontSize: '0.9rem' }}>
-                    {index + 1}
-                  </span>
-                  <img
-                    src={track.imagen || '/placeholder-song.png'}
-                    alt={track.nombre}
-                    style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: 'white', fontWeight: '500' }}>
-                      {track.nombre}
-                      {isTrackSelected(track.spotify_track_id) && status === 'playing' && (
-                        <span style={{ marginLeft: '8px', color: '#1DB954', fontSize: '0.8rem' }}>
-                          Reproduciendo
-                        </span>
+          <div className="tracks-section">
+            <div className="tracks-header">
+              <div>#</div>
+              <div>Título</div>
+              <div className="col-album">Álbum</div>
+              <div style={{ textAlign: 'right', paddingRight: '12px' }}><i className="bi bi-clock"></i></div>
+            </div>
+
+            <div className="tracks-list-container">
+              {playlistTracks.map((track, index) => {
+                const isSelected = isTrackSelected(track.spotify_track_id);
+                return (
+                  <div
+                    key={`${track.spotify_track_id || track.nombre || 'track'}-${index}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleTrackClick(track, index)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleTrackClick(track, index);
+                      }
+                    }}
+                    className={`track-row ${isSelected ? 'playing' : ''}`}
+                  >
+                    <div className="track-index">
+                      {isSelected && status === 'playing' ? (
+                        <i className="bi bi-soundwave" style={{ color: '#1DB954' }}></i>
+                      ) : (
+                        index + 1
                       )}
                     </div>
-                    <div style={{ color: '#b3b3b3', fontSize: '0.9rem' }}>
-                      {track.artistas.join(', ')}
+
+                    <div className="track-info-col">
+                      <img
+                        src={track.imagen || '/placeholder-song.png'}
+                        alt={track.nombre}
+                        className="track-thumb"
+                      />
+                      <div className="track-text">
+                        <span className="track-name">{track.nombre}</span>
+                        <span className="track-artists">{track.artistas.join(', ')}</span>
+                      </div>
+                    </div>
+
+                    <div className="track-album-col">
+                      {track.album}
+                    </div>
+
+                    <div className="track-duration-col">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          enqueueTracks(track);
+                        }}
+                        className="add-queue-btn"
+                        aria-label="Añadir a la cola"
+                        title="Añadir a la cola"
+                      >
+                        <i className="bi bi-plus-circle"></i>
+                      </button>
+                      <span>
+                        {Math.floor((track.duration_ms || 0) / 60000)}:{String(Math.floor(((track.duration_ms || 0) % 60000) / 1000)).padStart(2, '0')}
+                      </span>
                     </div>
                   </div>
-                  <div style={{ color: '#b3b3b3', fontSize: '0.9rem' }}>
-                    {track.album}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      enqueueTracks(track);
-                    }}
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      border: 'none',
-                      backgroundColor: 'rgba(29,185,84,0.15)',
-                      color: '#1DB954',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.2s ease',
-                    }}
-                    aria-label="Añadir a la cola"
-                    title="Añadir a la cola"
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.3)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.15)';
-                    }}
-                  >
-                    <i className="bi bi-plus" style={{ fontSize: '1rem' }}></i>
-                  </button>
-                  <div style={{ color: '#b3b3b3', fontSize: '0.9rem', width: '50px', textAlign: 'right' }}>
-                    {Math.floor((track.duration_ms || 0) / 60000)}:{String(Math.floor(((track.duration_ms || 0) % 60000) / 1000)).padStart(2, '0')}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-          gap: '20px',
-        }}>
+        <div className="playlists-grid">
           {playlists.map((playlist) => (
             <div
               key={playlist.id}
               onClick={() => fetchPlaylistDetails(playlist.id)}
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                borderRadius: '12px',
-                padding: '20px',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                border: '1px solid transparent',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                e.currentTarget.style.transform = 'translateY(-4px)';
-                e.currentTarget.style.borderColor = 'rgba(29, 185, 84, 0.3)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.borderColor = 'transparent';
-              }}
+              className="playlist-card"
             >
-              <img
-                src={playlist.images?.[0]?.url || '/placeholder-playlist.png'}
-                alt={playlist.name}
-                style={{
-                  width: '100%',
-                  height: '160px',
-                  borderRadius: '8px',
-                  objectFit: 'cover',
-                  marginBottom: '15px',
-                }}
-              />
-              <h3 style={{
-                color: 'white',
-                fontSize: '1rem',
-                fontWeight: '600',
-                margin: '0 0 8px 0',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}>
-                {playlist.name}
-              </h3>
-              <p style={{
-                color: '#b3b3b3',
-                fontSize: '0.85rem',
-                margin: '0 0 10px 0',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}>
-                {playlist.description || `De ${playlist.owner?.display_name}`}
-              </p>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                color: '#b3b3b3',
-                fontSize: '0.8rem',
-              }}>
-                <span>{playlist.tracks?.total} canciones</span>
-                <i className="bi bi-play-circle" style={{ fontSize: '1.2rem', color: '#1DB954' }} />
+              <div className="playlist-card-image-wrapper">
+                <img
+                  src={playlist.images?.[0]?.url || '/placeholder-playlist.png'}
+                  alt={playlist.name}
+                />
+                <button className="card-play-btn" title="Reproducir">
+                  <i className="bi bi-play-fill" />
+                </button>
+              </div>
+              <div className="playlist-card-info">
+                <h3>{playlist.name}</h3>
+                <p>{playlist.description || `De ${playlist.owner?.display_name}`}</p>
               </div>
             </div>
           ))}

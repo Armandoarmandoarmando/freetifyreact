@@ -4,6 +4,8 @@ import gsap from 'gsap';
 import { useAuth } from '../contexts/AuthContext';
 import LoginPrompt from '../components/LoginPrompt';
 import PlayerBar from '../components/PlayerBar';
+import MobileNav from '../components/MobileNav';
+import './Home.css';
 
 const Home = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
@@ -15,22 +17,22 @@ const Home = () => {
   const { isAuthenticated, isGuest, user, logout } = useAuth();
 
   const navigationItems = [
-    { 
-      icon: 'bi-search', 
-      label: 'Buscar', 
+    {
+      icon: 'bi-search',
+      label: 'Buscar',
       path: 'search',
       allowGuest: true
     },
-    { 
-      icon: 'bi-music-note-list', 
-      label: 'Playlists', 
+    {
+      icon: 'bi-music-note-list',
+      label: 'Playlists',
       path: 'playlists',
       allowGuest: false,
       description: 'Accede a tus playlists personales de Spotify'
     },
-    { 
-      icon: 'bi-person', 
-      label: 'Perfil', 
+    {
+      icon: 'bi-person',
+      label: 'Perfil',
       path: 'profile',
       allowGuest: false,
       description: 'Ve tu perfil y estadísticas de Spotify'
@@ -57,56 +59,47 @@ const Home = () => {
         duration: 0.8,
         ease: "power3.out"
       })
-      // Animar el logo
-      .from(".logo", {
-        opacity: 0,
-        y: -20,
-        duration: 0.5,
-        ease: "power2.out"
-      }, "-=0.4")
-      // Animar los items de navegación
-      .from(".nav-item", {
-        opacity: 1,
-        x: 10,
-        duration: 0.5,
-        stagger: 0.1,
-        ease: "power2.out"
-      }, "-=0.3")
-      // Animar el contenido principal
-      .from("main", {
-        opacity: 0,
-        y: 20,
-        duration: 0.5,
-        ease: "power2.out"
-      }, "-=0.5");
+        // Animar el logo
+        .from(".logo", {
+          opacity: 0,
+          y: -20,
+          duration: 0.5,
+          ease: "power2.out"
+        }, "-=0.4")
+        // Animar los items de navegación
+        .from(".nav-item", {
+          opacity: 1,
+          x: 10,
+          duration: 0.5,
+          stagger: 0.1,
+          ease: "power2.out"
+        }, "-=0.3")
+        // Animar el contenido principal
+        .from("main", {
+          opacity: 0,
+          y: 20,
+          duration: 0.5,
+          ease: "power2.out"
+        }, "-=0.5");
 
-      
+
     }, containerRef);
 
     return () => ctx.revert();
   }, []);
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', height: '100vh', backgroundColor: '#000000' }}>
+    <div ref={containerRef} className="home-container">
       {/* Drawer */}
       <div
         ref={drawerRef}
+        className="sidebar"
         style={{
           width: isDrawerOpen ? '240px' : '72px',
-          backgroundColor: '#121212',
-          height: '100%',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          borderRight: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '20px 0',
-          position: 'relative'
         }}
       >
         {/* Logo */}
         <div className="logo" style={{
-          padding: '0 20px',
-          marginBottom: '20px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: isDrawerOpen ? 'flex-start' : 'center'
@@ -287,7 +280,7 @@ const Home = () => {
                 e.target.style.color = (!item.allowGuest && !isAuthenticated) ? '#666' : 'white';
               }}
             >
-              <i className={`${item.icon}`} style={{ 
+              <i className={`${item.icon}`} style={{
                 fontSize: '1.3rem',
                 opacity: (!item.allowGuest && !isAuthenticated) ? 0.4 : 0.9,
                 width: '24px',
@@ -317,36 +310,21 @@ const Home = () => {
 
         {/* Toggle Drawer Button */}
         <button
+          className="toggle-drawer-btn"
           onClick={() => setIsDrawerOpen(!isDrawerOpen)}
           style={{
-            position: 'absolute',
-            right: '-12px',
-            top: '20px',
-            width: '24px',
-            height: '24px',
-            borderRadius: '50%',
-            backgroundColor: '#00000000',
-            border: 'none',
-            color: 'white',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all 0.3s ease',
             transform: isDrawerOpen ? 'rotate(0deg)' : 'rotate(180deg)',
-            zIndex: 10,
-            boxShadow: '0 rgba(29, 185, 84, 0.42)'
           }}
           onMouseEnter={(e) => {
             e.target.style.backgroundColor = '#00000000';
-            e.target.style.transform = isDrawerOpen ? 
-              'rotate(0deg) scale(1.1)' : 
+            e.target.style.transform = isDrawerOpen ?
+              'rotate(0deg) scale(1.1)' :
               'rotate(180deg) scale(1.1)';
           }}
           onMouseLeave={(e) => {
             e.target.style.backgroundColor = '#00000000';
-            e.target.style.transform = isDrawerOpen ? 
-              'rotate(0deg) scale(1)' : 
+            e.target.style.transform = isDrawerOpen ?
+              'rotate(0deg) scale(1)' :
               'rotate(180deg) scale(1)';
           }}
         >
@@ -355,14 +333,7 @@ const Home = () => {
       </div>
 
       {/* Main Content */}
-      <main style={{
-        flex: 1,
-        padding: '20px',
-        overflowY: 'auto',
-        backgroundColor: '#121212',
-        color: 'white',
-        paddingBottom: '180px'
-      }}>
+      <main className="main-content">
         <Outlet />
       </main>
 
@@ -375,6 +346,13 @@ const Home = () => {
       )}
 
       <PlayerBar />
+      <MobileNav
+        navigationItems={navigationItems}
+        onAuthPrompt={(msg) => {
+          setPromptMessage(msg);
+          setShowLoginPrompt(true);
+        }}
+      />
     </div>
   );
 };

@@ -1,13 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { searchContent } from '../api';
 import gsap from 'gsap';
 import { usePlayer } from '../contexts/PlayerContext';
+import './Search.css';
 
 const Search = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('songs');
   const [searchResults, setSearchResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const navigate = useNavigate();
   const [recentSearches] = useState([
     'Rock Alternativo',
     'Pop Latino',
@@ -55,8 +60,15 @@ const Search = () => {
       return;
     }
 
+    const artistLabel = item.artista || (Array.isArray(item.artistas) ? item.artistas[0] : null) || item.nombre;
+    if (artistLabel) {
+      const encodedArtist = encodeURIComponent(artistLabel);
+      navigate(`/home/artist/${encodedArtist}`);
+      return;
+    }
+
     if (item.url) {
-      window.open(item.url, '_blank');
+      window.open(item.url, '_blank', 'noopener');
     }
   };
 
@@ -74,7 +86,7 @@ const Search = () => {
 
   useEffect(() => {
     // Animación de entrada
-    gsap.from('.search-header', {
+    gsap.from('.search-header-sticky', {
       y: -20,
       opacity: 1,
       duration: 0.5,
@@ -89,6 +101,7 @@ const Search = () => {
       ease: 'power2.out'
     });
   }, []);
+
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
 
@@ -116,105 +129,35 @@ const Search = () => {
   }, [searchQuery, searchType, handleSearch]);
 
   return (
-    <div className="search-container" style={{
-      padding: '20px',
-      maxWidth: '1800px',
-      margin: '0 auto'
-    }}>
-      {/* Búsqueda */}
-      <div className="search-header" style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 10,
-        backgroundColor: '#121212',
-        padding: '20px 0'
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          marginBottom: '24px'
-        }}>
-          <div style={{
-            position: 'relative',
-            flex: '1',
-            maxWidth: '364px'
-          }}>
-            <i className="bi bi-search" style={{
-              position: 'absolute',
-              left: '12px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: '#ffffff',
-              fontSize: '1.2rem'
-            }}></i>
+    <div className="search-container">
+      {/* Search Header */}
+      <div className="search-header-sticky">
+        <div className="search-controls-row">
+          <div className="search-input-wrapper">
+            <i className="bi bi-search search-input-icon" />
             <input
               type="text"
               placeholder={`Buscar ${searchType === 'songs' ? 'canciones' : 'artistas'}...`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px 40px',
-                borderRadius: '500px',
-                border: 'none',
-                backgroundColor: '#242424',
-                color: 'white',
-                fontSize: '0.875rem',
-                fontWeight: '500',
-                transition: 'all 0.3s ease'
-              }}
-              onFocus={(e) => {
-                e.target.style.backgroundColor = '#323232';
-                e.target.style.outline = 'none';
-              }}
-              onBlur={(e) => {
-                e.target.style.backgroundColor = '#242424';
-              }}
+              className="search-input"
             />
           </div>
-          <select
-            value={searchType}
-            onChange={(e) => setSearchType(e.target.value)}
-            style={{
-              padding: '12px 20px',
-              borderRadius: '500px',
-              border: 'none',
-              backgroundColor: '#242424',
-              color: 'white',
-              fontSize: '0.875rem',
-              fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease'
-            }}
-            onFocus={(e) => {
-              e.target.style.backgroundColor = '#323232';
-              e.target.style.outline = 'none';
-            }}
-            onBlur={(e) => {
-              e.target.style.backgroundColor = '#242424';
-            }}
+          <button
+            type="button"
+            className="search-filter-btn"
+            onClick={() => setIsFilterModalOpen(true)}
+            title="Filtrar búsqueda"
           >
-            <option value="songs">Canciones</option>
-            <option value="artist">Artistas</option>
-          </select>
+            <i className="bi bi-funnel" />
+          </button>
         </div>
 
         {/* Búsquedas recientes */}
         {!searchQuery && (
           <div style={{ marginBottom: '32px' }}>
-            <h2 style={{
-              fontSize: '1.5rem',
-              fontWeight: '700',
-              marginBottom: '16px'
-            }}>
-              Búsquedas recientes
-            </h2>
-            <div style={{
-              display: 'flex',
-              gap: '12px',
-              flexWrap: 'wrap'
-            }}>
+            <h2 className="section-title">Búsquedas recientes</h2>
+            <div className="recent-searches-list">
               {recentSearches.map((search, index) => (
                 <button
                   key={index}
@@ -222,24 +165,7 @@ const Search = () => {
                     setSearchQuery(search);
                     setSearchType('songs');
                   }}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '500px',
-                    backgroundColor: '#242424',
-                    border: 'none',
-                    color: 'white',
-                    fontSize: '0.875rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.backgroundColor = '#323232';
-                    e.target.style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.backgroundColor = '#242424';
-                    e.target.style.transform = 'scale(1)';
-                  }}
+                  className="recent-btn"
                 >
                   {search}
                 </button>
@@ -252,60 +178,17 @@ const Search = () => {
       {/* Categorías */}
       {!searchQuery && (
         <div>
-          <h2 style={{
-            fontSize: '1.5rem',
-            fontWeight: '700',
-            marginBottom: '16px'
-          }}>
-            Explorar todo
-          </h2>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-            gap: '24px'
-          }}>
+          <h2 className="section-title">Explorar todo</h2>
+          <div className="categories-grid">
             {categories.map((category, index) => (
               <div
                 key={index}
                 className="category-card"
-                style={{
-                  backgroundColor: category.color,
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  position: 'relative',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  aspectRatio: '1'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.transform = 'scale(1.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.transform = 'scale(1)';
-                }}
+                style={{ backgroundColor: category.color }}
               >
-                <div style={{
-                  padding: '5px 10px',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between'
-                }}>
-                  <h3 style={{
-                    fontSize: '1.5rem',
-                    fontWeight: '700',
-                    marginBottom: '8px'
-                  }}>
-                    {category.name}
-                  </h3>
-                  <i className={category.icon} style={{
-                    fontSize: '2rem',
-                    transform: 'rotate(25deg)',
-                    position: 'absolute',
-                    bottom: '16px',
-                    right: '16px',
-                    filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.3))'
-                  }}></i>
+                <div className="category-content">
+                  <h3 className="category-title">{category.name}</h3>
+                  <i className={`${category.icon} category-icon`} />
                 </div>
               </div>
             ))}
@@ -317,32 +200,14 @@ const Search = () => {
       {searchQuery && (
         <div style={{ marginTop: '24px' }}>
           {isLoading ? (
-            <div style={{ 
-              color: '#b3b3b3',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px' 
-            }}>
-              <i className="bi bi-arrow-repeat" style={{
-                fontSize: '1.2rem',
-                animation: 'spin 1s linear infinite'
-              }}></i>
+            <div className="search-loading">
+              <i className="bi bi-arrow-repeat" />
               <p>Buscando {searchType === 'songs' ? 'canciones' : 'artistas'}...</p>
             </div>
           ) : searchResults.length > 0 ? (
             <div>
-              <h2 style={{
-                fontSize: '1.5rem',
-                fontWeight: '700',
-                marginBottom: '16px'
-              }}>
-                Resultados para "{searchQuery}"
-              </h2>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                gap: '20px'
-              }}>
+              <h2 className="section-title">Resultados para "{searchQuery}"</h2>
+              <div className="search-results-grid">
                 {searchResults.map((item, index) => {
                   const current = isCurrentTrack(item);
                   const isSong = searchType === 'songs';
@@ -351,52 +216,18 @@ const Search = () => {
                   return (
                     <div
                       key={`${item.spotify_track_id || item.nombre}-${index}`}
-                      style={{
-                        backgroundColor: '#242424',
-                        borderRadius: '8px',
-                        padding: '16px',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#323232';
-                        e.currentTarget.style.transform = 'translateY(-4px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#242424';
-                        e.currentTarget.style.transform = 'translateY(0)';
-                      }}
+                      className="search-result-card"
                       onClick={() => handleCardClick(item)}
                     >
-                      <div style={{
-                        width: '100%',
-                        aspectRatio: '1',
-                        borderRadius: '4px',
-                        marginBottom: '12px',
-                        overflow: 'hidden',
-                        position: 'relative'
-                      }}>
+                      <div className="search-result-card-image-wrapper">
                         {item.imagen ? (
-                          <img
-                            src={item.imagen}
-                            alt={item.nombre || item.artista}
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover'
-                            }}
-                          />
+                          <img src={item.imagen} alt={item.nombre || item.artista} />
                         ) : (
-                          <div style={{
-                            width: '100%',
-                            height: '100%',
-                            backgroundColor: '#333',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}>
-                            <i className={`bi ${isSong ? 'bi-music-note' : 'bi-person'}`}
-                               style={{ fontSize: '2rem', color: '#1DB954' }}></i>
+                          <div className="search-result-fallback">
+                            <i
+                              className={`bi ${isSong ? 'bi-music-note' : 'bi-person'}`}
+                              style={{ fontSize: '3rem', color: '#1DB954' }}
+                            />
                           </div>
                         )}
                         {isSong && (
@@ -414,68 +245,31 @@ const Search = () => {
                                 handlePlaySong(item);
                               }
                             }}
-                            style={{
-                              position: 'absolute',
-                              right: '12px',
-                              bottom: '12px',
-                              width: '48px',
-                              height: '48px',
-                              borderRadius: '50%',
-                              border: 'none',
-                              backgroundColor: 'rgba(29,185,84,0.9)',
-                              color: '#fff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '1.4rem',
-                              cursor: 'pointer',
-                              boxShadow: current ? '0 8px 20px rgba(29,185,84,0.4)' : '0 4px 12px rgba(0,0,0,0.3)',
-                              transition: 'transform 0.2s ease, box-shadow 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.transform = 'scale(1.05)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = 'scale(1)';
-                            }}
+                            className={`search-result-play-btn ${isPlayingCurrent ? 'playing' : ''}`}
+                            title={isPlayingCurrent ? "Pausar" : "Reproducir"}
                           >
-                            {isPlayingCurrent ? <i className="bi bi-pause-fill"></i> : <i className="bi bi-play-fill" style={{ paddingLeft: '3px' }}></i>}
+                            {isPlayingCurrent ? <i className="bi bi-pause-fill" /> : <i className="bi bi-play-fill" />}
                           </button>
                         )}
                       </div>
-                      <h3 style={{
-                        fontSize: '1rem',
-                        fontWeight: '600',
-                        marginBottom: '4px',
-                        color: 'white',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {item.nombre}
-                      </h3>
+
+                      <h3 className="search-result-title">{item.nombre}</h3>
+
                       {isSong && item.artista && (
-                        <p style={{
-                          fontSize: '0.875rem',
-                          color: current ? '#1DB954' : '#b3b3b3',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
+                        <p className={`search-result-subtitle ${current ? 'playing-text' : ''}`}>
                           {item.artista}
                         </p>
                       )}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
-                        {current && (
-                          <div style={{
-                            fontSize: '0.75rem',
-                            color: '#1DB954',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em'
-                          }}>
+
+                      <div className="search-result-footer">
+                        {current ? (
+                          <div className="search-status-label">
                             {status === 'playing' ? 'Reproduciendo' : status === 'paused' ? 'Pausado' : 'Cargando'}
                           </div>
+                        ) : (
+                          <div /> /* Empty div to preserve flex layout if needed */
                         )}
+
                         {isSong && (
                           <button
                             type="button"
@@ -483,29 +277,11 @@ const Search = () => {
                               event.stopPropagation();
                               handleAddToQueue(item);
                             }}
-                            style={{
-                              width: '32px',
-                              height: '32px',
-                              borderRadius: '50%',
-                              border: 'none',
-                              backgroundColor: 'rgba(29,185,84,0.2)',
-                              color: '#1DB954',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              transition: 'background-color 0.2s ease',
-                            }}
+                            className="add-queue-result-btn"
                             aria-label="Añadir a la cola"
                             title="Añadir a la cola"
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.35)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.2)';
-                            }}
                           >
-                            <i className="bi bi-plus" style={{ fontSize: '1rem' }}></i>
+                            <i className="bi bi-plus-circle" />
                           </button>
                         )}
                       </div>
@@ -520,6 +296,60 @@ const Search = () => {
             </p>
           )}
         </div>
+      )}
+
+      {/* Filter Bottom Sheet Modal */}
+      {isFilterModalOpen && createPortal(
+        <div className="bottom-sheet-overlay" onClick={() => setIsFilterModalOpen(false)}>
+          <div className="bottom-sheet-content" onClick={(e) => e.stopPropagation()}>
+            <div className="bottom-sheet-header">
+              <h3>Filtrar por</h3>
+              <button
+                type="button"
+                className="close-sheet-btn"
+                onClick={() => setIsFilterModalOpen(false)}
+              >
+                <i className="bi bi-x-lg" />
+              </button>
+            </div>
+            <div className="bottom-sheet-options">
+              <button
+                type="button"
+                className={`filter-option-btn ${searchType === 'songs' ? 'active' : ''}`}
+                onClick={() => {
+                  setSearchType('songs');
+                  setIsFilterModalOpen(false);
+                }}
+              >
+                <div className="filter-option-icon">
+                  <i className="bi bi-music-note" />
+                </div>
+                <div className="filter-option-text">
+                  Canciones
+                  {searchType === 'songs' && <i className="bi bi-check-circle-fill check-icon" />}
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className={`filter-option-btn ${searchType === 'artist' ? 'active' : ''}`}
+                onClick={() => {
+                  setSearchType('artist');
+                  setIsFilterModalOpen(false);
+                }}
+              >
+                <div className="filter-option-icon">
+                  <i className="bi bi-person" />
+                </div>
+                <div className="filter-option-text">
+                  Artistas
+                  {searchType === 'artist' && <i className="bi bi-check-circle-fill check-icon" />}
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

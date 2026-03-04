@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { usePlayer } from '../contexts/PlayerContext';
+import './PlayerBar.css';
 
 const formatTime = (seconds) => {
   if (!Number.isFinite(seconds)) return '0:00';
@@ -82,103 +83,39 @@ const PlayerBar = () => {
   if (!hasTrack) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      bottom: '24px',
-      width: 'min(900px, calc(100% - 48px))',
-      padding: '20px 28px',
-      borderRadius: '18px',
-      background: 'linear-gradient(135deg, rgba(18,18,18,0.95), rgba(30,30,30,0.95))',
-      boxShadow: '0 20px 45px rgba(0,0,0,0.5)',
-      color: '#fff',
-      backdropFilter: 'blur(12px)',
-      border: '1px solid rgba(255,255,255,0.06)',
-      zIndex: 200,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
-        <div style={{
-          width: '64px',
-          height: '64px',
-          borderRadius: '12px',
-          overflow: 'hidden',
-          flexShrink: 0,
-          background: 'rgba(255,255,255,0.05)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
+    <div className="player-bar-container">
+      <div className="player-main-row">
+        <div className="track-artwork">
           {currentTrack?.image ? (
             <img
               src={currentTrack.image}
               alt={currentTrack.title}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (
             <i className="bi bi-music-note" style={{ fontSize: '1.8rem', color: '#1DB954' }}></i>
           )}
         </div>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '4px',
-          }}>
-            <h3 style={{
-              margin: 0,
-              fontSize: '1.05rem',
-              fontWeight: 600,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}>
+        <div className="track-info">
+          <div className="track-title-container">
+            <h3 className="track-title">
               {currentTrack?.title || 'Sin título'}
             </h3>
-            <span style={{
-              fontSize: '0.7rem',
-              padding: '2px 8px',
-              borderRadius: '999px',
-              backgroundColor: 'rgba(29, 185, 84, 0.15)',
-              color: '#1DB954',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}>
+            <span className="track-badge">
               {currentTrack?.source === 'cache' || currentTrack?.source === 'local-cache' ? 'Offline ready' : 'Streaming'}
             </span>
           </div>
-          <p style={{
-            margin: 0,
-            fontSize: '0.85rem',
-            color: '#bbb',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}>
+          <p className="track-artists">
             {currentTrack?.artists?.join(', ') || 'Artista desconocido'}
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="main-controls">
           <button
             type="button"
             onClick={playPrevious}
             disabled={isLoading}
-            style={{
-              width: '46px',
-              height: '46px',
-              borderRadius: '50%',
-              border: 'none',
-              background: 'rgba(255,255,255,0.08)',
-              color: '#fff',
-              fontSize: '1.1rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            className="control-btn"
           >
             <i className="bi bi-skip-backward-fill" />
           </button>
@@ -187,30 +124,8 @@ const PlayerBar = () => {
             type="button"
             onClick={() => (isPlaying ? pause() : resume())}
             disabled={isLoading}
-            style={{
-              width: '58px',
-              height: '58px',
-              borderRadius: '50%',
-              border: 'none',
-              background: '#1DB954',
-              color: '#fff',
-              fontSize: '1.6rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-              boxShadow: isPlaying ? '0 12px 30px rgba(29,185,84,0.35)' : '0 6px 18px rgba(29,185,84,0.25)',
-              opacity: isLoading ? 0.6 : 1,
-            }}
-            onMouseEnter={(e) => {
-              if (!isLoading) {
-                e.currentTarget.style.transform = 'scale(1.05)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-            }}
+            className={`play-pause-btn ${isPlaying ? 'playing' : ''} ${isLoading ? 'loading' : ''}`}
+            style={{ opacity: isLoading ? 0.6 : 1 }}
           >
             {isLoading ? (
               <i className="bi bi-hourglass-split" />
@@ -225,56 +140,26 @@ const PlayerBar = () => {
             type="button"
             onClick={playNext}
             disabled={isLoading}
-            style={{
-              width: '46px',
-              height: '46px',
-              borderRadius: '50%',
-              border: 'none',
-              background: 'rgba(255,255,255,0.08)',
-              color: '#fff',
-              fontSize: '1.1rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            className="control-btn"
           >
             <i className="bi bi-skip-forward-fill" />
           </button>
         </div>
       </div>
 
-      <div style={{
-        marginTop: '18px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: '16px',
-        flexWrap: 'wrap',
-      }}>
+      <div className="player-secondary-row">
         <div>
           <button
             type="button"
             onClick={toggleShuffle}
-            style={{
-              backgroundColor: isShuffle ? 'rgba(29,185,84,0.25)' : 'rgba(255,255,255,0.08)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '999px',
-              padding: '8px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-            }}
+            className={`secondary-btn ${isShuffle ? 'active' : ''}`}
           >
             <i className="bi bi-shuffle" />
-            {isShuffle ? 'Aleatorio activo' : 'Aleatorio apagado'}
+            <span>{isShuffle ? 'Aleatorio activo' : 'Aleatorio apagado'}</span>
           </button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-          <div style={{ flex: 1 }}>
+        <div className="progress-container">
+          <div className="progress-wrapper">
             <input
               type="range"
               min={0}
@@ -288,23 +173,10 @@ const PlayerBar = () => {
                   seek(newTime);
                 }
               }}
-              style={{
-                width: '100%',
-                appearance: 'none',
-                height: '6px',
-                borderRadius: '3px',
-                background: sliderBackground,
-                outline: 'none',
-                cursor: 'pointer',
-              }}
+              className="progress-slider"
+              style={{ background: sliderBackground }}
             />
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginTop: '6px',
-              fontSize: '0.75rem',
-              color: '#bbb',
-            }}>
+            <div className="progress-times">
               <span>{formatTime(progress.currentTime)}</span>
               <span>{formatTime(progress.duration)}</span>
             </div>
@@ -312,40 +184,18 @@ const PlayerBar = () => {
           <button
             type="button"
             onClick={cycleRepeatMode}
-            style={{
-              backgroundColor: repeatMode === 'off' ? 'rgba(255,255,255,0.08)' : 'rgba(29,185,84,0.25)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '999px',
-              padding: '8px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-            }}
+            className={`secondary-btn ${repeatMode !== 'off' ? 'active' : ''}`}
           >
             <i className={repeatMode === 'track' ? 'bi bi-repeat-1' : 'bi bi-repeat'} />
-            {repeatMode === 'off' ? 'Sin repetición' : repeatMode === 'queue' ? 'Repetir cola' : 'Repetir canción'}
+            <span>{repeatMode === 'off' ? 'Sin repetición' : repeatMode === 'queue' ? 'Repetir cola' : 'Repetir canción'}</span>
           </button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div className="volume-queue-controls">
+          <div className="volume-controls">
             <button
               type="button"
               onClick={decreaseVolume}
-              style={{
-                width: '30px',
-                height: '30px',
-                borderRadius: '50%',
-                border: 'none',
-                backgroundColor: 'rgba(255,255,255,0.08)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-              }}
+              className="volume-btn"
               title="Bajar volumen"
               aria-label="Bajar volumen"
             >
@@ -360,81 +210,48 @@ const PlayerBar = () => {
               value={volumePercent}
               onChange={handleVolumeInput}
               aria-label="Volumen"
+              className="volume-slider"
               style={{
-                width: '100px',
-                appearance: 'none',
-                height: '6px',
-                borderRadius: '3px',
                 background: `linear-gradient(90deg, #1DB954 0%, #1DB954 ${volumePercent}%, rgba(255,255,255,0.1) ${volumePercent}%, rgba(255,255,255,0.1) 100%)`,
-                outline: 'none',
-                cursor: 'pointer',
               }}
             />
             <button
               type="button"
               onClick={increaseVolume}
-              style={{
-                width: '30px',
-                height: '30px',
-                borderRadius: '50%',
-                border: 'none',
-                backgroundColor: 'rgba(255,255,255,0.08)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-              }}
+              className="volume-btn"
               title="Subir volumen"
               aria-label="Subir volumen"
             >
               <i className="bi bi-plus"></i>
             </button>
-            <span style={{ fontSize: '0.75rem', color: '#bbb', width: '36px', textAlign: 'right' }}>{volumePercent}%</span>
+            <span className="volume-value">{volumePercent}%</span>
           </div>
           {nextTrack ? (
-            <div style={{ fontSize: '0.85rem', color: '#bbb', maxWidth: '220px' }}>
-              <div style={{ opacity: 0.7 }}>A continuación</div>
-              <div style={{ color: '#fff', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div className="next-track-preview">
+              <div className="next-track-label">A continuación</div>
+              <div className="next-track-title">
                 {nextTrack.nombre || nextTrack.title}
               </div>
-              <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div className="next-track-artists">
                 {(nextTrack.artistas || nextTrack.artists || []).join(', ')}
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: '0.85rem', color: '#bbb' }}>Fin de la cola</div>
+            <div className="queue-empty">Fin de la cola</div>
           )}
           <button
             type="button"
             onClick={handleToggleQueue}
-            style={{
-              backgroundColor: showQueue ? '#1DB954' : 'rgba(255,255,255,0.08)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '999px',
-              padding: '8px 14px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '0.85rem',
-            }}
+            className={`secondary-btn ${showQueue ? 'active' : ''}`}
           >
             <i className="bi bi-music-note-list" />
-            {showQueue ? 'Ocultar cola' : `Ver cola (${queue?.length || 0})`}
+            <span>{showQueue ? 'Ocultar cola' : `Ver cola (${queue?.length || 0})`}</span>
           </button>
         </div>
       </div>
 
       {showQueue && (
-        <div style={{
-          marginTop: '16px',
-          maxHeight: '220px',
-          overflowY: 'auto',
-          borderTop: '1px solid rgba(255,255,255,0.08)',
-          paddingTop: '12px',
-        }}>
+        <div className="queue-list">
           {queue && queue.length ? (
             queue.map((track, index) => {
               const isCurrent = index === queueIndex;
@@ -450,34 +267,25 @@ const PlayerBar = () => {
                       handleSelectQueueTrack(track, index);
                     }
                   }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '8px 6px',
-                    borderRadius: '8px',
-                    backgroundColor: isCurrent ? 'rgba(29,185,84,0.25)' : 'transparent',
-                    cursor: 'pointer',
-                    color: 'white',
-                  }}
+                  className={`queue-item ${isCurrent ? 'active' : ''}`}
                 >
-                  <span style={{ width: '22px', fontSize: '0.8rem', color: '#bbb', textAlign: 'right' }}>{index + 1}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: isCurrent ? 600 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span className="queue-item-index">{index + 1}</span>
+                  <div className="queue-item-details">
+                    <div className="queue-item-title">
                       {track.nombre || track.title}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#bbb', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div className="queue-item-artists">
                       {(track.artistas || track.artists || []).join(', ')}
                     </div>
                   </div>
                   {isCurrent ? (
-                    <span style={{ fontSize: '0.7rem', color: '#1DB954', fontWeight: 600 }}>Reproduciendo</span>
+                    <span className="queue-item-playing-label">Reproduciendo</span>
                   ) : null}
                 </div>
               );
             })
           ) : (
-            <p style={{ color: '#bbb', margin: 0 }}>Sin canciones en cola.</p>
+            <p className="queue-empty" style={{ margin: 0 }}>Sin canciones en cola.</p>
           )}
         </div>
       )}

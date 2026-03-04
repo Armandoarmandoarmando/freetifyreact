@@ -1,0 +1,87 @@
+.home-container {
+    display: flex;
+    height: 100vh;
+    background-color: #000000;
+}
+
+.sidebar {
+    background-color: #121212;
+    height: 100%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 0;
+    position: relative;
+    z-index: 50;
+    /* Ensure it stays above content if needed */
+}
+
+.main-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    background-color: #121212;
+    color: white;
+    padding-bottom: 180px;
+    /* Space for player bar */
+    width: 100%;
+    /* Important for when sidebar is hidden or absolute */
+}
+
+/* Sidebar toggle button (desktop) */
+.toggle-drawer-btn {
+    position: absolute;
+    right: -12px;
+    top: 20px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    z-index: 10;
+    box-shadow: 0 0 0 rgba(29, 185, 84, 0.42);
+}
+
+.toggle-drawer-btn:hover {
+    transform: scale(1.1);
+}
+
+/* Mobile and Tablet responsive styles */
+@media (max-width: 1024px) {
+
+    /* Hide sidebar on mobile by translating it fully or shrinking to 0 */
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        transform: translateX(-100%);
+        /* Hidden by default on mobile */
+        width: 240px !important;
+        /* Force full width drawer if opened */
+        z-index: 100;
+    }
+
+    /* Add an active class rule in case we want a toggle menu later */
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+
+    .main-content {
+        padding: 10px;
+        padding-bottom: 250px;
+        /* Space for both mobile nav and player bar */
+    }
+
+    /* Also hide the toggle button on mobile to fully remove the sidebar concept for now, 
+     or you could repurpose it as a hamburger menu */
+    .toggle-drawer-btn {
+        display: none;
+    }
+}

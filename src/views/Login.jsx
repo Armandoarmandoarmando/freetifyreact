@@ -13,7 +13,6 @@ const Login = () => {
   const containerRef = useRef(null);
   const formRef = useRef(null);
   const { isAuthenticated } = useAuth();
-  const [requestedScopes, setRequestedScopes] = useState([]);
 
   // Redirigir si ya está autenticado
   useEffect(() => {
@@ -55,50 +54,12 @@ const Login = () => {
     return () => ctx.revert();
   }, []);
 
-  useEffect(() => {
-    const loadScopes = async () => {
-      try {
-        const response = await fetch(`${API_URL}/auth/debug`);
-        if (!response.ok) {
-          return;
-        }
-        const data = await response.json();
-        if (data?.scopes) {
-          setRequestedScopes(
-            data.scopes
-              .split(/\s+/)
-              .filter(Boolean)
-          );
-        }
-      } catch (err) {
-        console.warn('No se pudieron cargar los scopes de Spotify', err);
-      }
-    };
-
-    loadScopes();
-  }, []);
-
-  const handleSpotifyLogin = async () => {
+  const handleSpotifyLogin = () => {
     setIsLoading(true);
     setError("");
-    
-    try {
-      // Llamar al endpoint de login del backend
-      const response = await fetch(`${API_URL}/auth/login`);
-      const data = await response.json();
-      
-      if (response.ok) {
-        // Redirigir a Spotify OAuth
-        window.location.href = data.auth_url;
-      } else {
-        setError("Error al iniciar sesión con Spotify");
-      }
-    } catch (err) {
-      setError("Error de conexión con el servidor");
-      console.error('Login error:', err);
-    } finally {
-      setIsLoading(false);
-    }
+
+    // Usar redirección de navegador evita el bloqueo de fetch con certificados locales no confiables.
+    window.location.assign(`${API_URL}/auth/login?redirect=true`);
   };
  
   return (
@@ -190,42 +151,6 @@ const Login = () => {
             Accede a tu música, playlists y más con tu cuenta de Spotify
           </p>
         </div>
-
-        {requestedScopes.length > 0 && (
-          <div style={{
-            width: '100%',
-            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-            borderRadius: '16px',
-            padding: '1rem 1.25rem',
-            color: '#d9d9d9'
-          }}>
-            <p style={{
-              margin: '0 0 0.5rem 0',
-              fontWeight: 500,
-              fontSize: '0.95rem'
-            }}>
-              Permisos solicitados para habilitar tus favoritos, biblioteca y seguimiento:
-            </p>
-            <ul style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
-              display: 'grid',
-              gap: '0.35rem'
-            }}>
-              {requestedScopes.map((scope) => (
-                <li key={scope} style={{
-                  fontSize: '0.85rem',
-                  backgroundColor: 'rgba(0, 0, 0, 0.25)',
-                  borderRadius: '12px',
-                  padding: '0.45rem 0.75rem'
-                }}>
-                  {scope}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         {/* Error Message */}
         {error && (

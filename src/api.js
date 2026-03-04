@@ -13,6 +13,22 @@ export async function searchContent(query, type = 'songs') {
   return res.json();
 }
 
+export async function fetchArtistSongs(artistName) {
+  if (!artistName) {
+    throw new Error("artistName es requerido para obtener canciones");
+  }
+
+  const encodedName = encodeURIComponent(artistName);
+  const res = await fetch(`${API_URL}/freetify/artist/${encodedName}`);
+
+  if (!res.ok) {
+    const message = await res.text();
+    throw new Error(message || "No se pudieron obtener las canciones del artista");
+  }
+
+  return res.json();
+}
+
 export async function initiateSpotifyLogin() {
   const res = await fetch(`${API_URL}/auth/login`);
   if (!res.ok) throw new Error("Error al iniciar login");
@@ -107,6 +123,42 @@ export async function fetchCachedTrack(cacheKey) {
     throw new Error('Track no disponible en caché');
   }
   return res;
+}
+
+export async function fetchCacheStatus(cacheKey) {
+  const res = await fetch(`${API_URL}/streams/cache-status/${cacheKey}`);
+  if (!res.ok) {
+    throw new Error('No se pudo consultar el estado de caché');
+  }
+  return res.json();
+}
+
+export function subscribeCacheStatus(cacheKey, handlers = {}) {
+  if (!cacheKey || typeof window === 'undefined' || typeof window.EventSource === 'undefined') {
+    return () => {};
+  }
+
+  const streamUrl = `${API_URL}/streams/cache-status/${encodeURIComponent(cacheKey)}/events`;
+  const source = new window.EventSource(streamUrl);
+
+  const handleStatus = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      handlers.onStatus?.(payload);
+    } catch (error) {
+      handlers.onError?.(error);
+    }
+  };
+
+  source.addEventListener('status', handleStatus);
+  source.onerror = (event) => {
+    handlers.onError?.(event);
+  };
+
+  return () => {
+    source.removeEventListener('status', handleStatus);
+    source.close();
+  };
 }
 
 export async function fetchRecommendations(trackId, limit = 10) {

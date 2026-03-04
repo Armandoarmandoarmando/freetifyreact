@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import './Profile.css';
 import { getUserProfile, getUserTopTracks, getUserTopArtists } from '../api';
 import gsap from 'gsap';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -10,10 +12,23 @@ const Profile = () => {
   const [topArtists, setTopArtists] = useState([]);
   const [timeRange, setTimeRange] = useState('medium_term');
   const [loading, setLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [showAudioSettings, setShowAudioSettings] = useState(false);
+  const isFirstLoad = useRef(true);
   const [error, setError] = useState('');
-  const { accessToken, user } = useAuth();
+  const { accessToken, user, logout } = useAuth();
   const containerRef = useRef(null);
-  const { playTrack, enqueueTracks, currentTrack, status, pause, resume } = usePlayer();
+  const navigate = useNavigate();
+  const {
+    playTrack,
+    enqueueTracks,
+    currentTrack,
+    status,
+    pause,
+    resume,
+    audioSettings,
+    updateAudioSettings,
+  } = usePlayer();
 
   const timeRangeOptions = [
     { value: 'short_term', label: 'Último mes' },
@@ -34,21 +49,28 @@ const Profile = () => {
 
   const fetchAllData = useCallback(async () => {
     try {
-      setLoading(true);
+      if (isFirstLoad.current) {
+        setLoading(true);
+      } else {
+        setIsUpdating(true);
+      }
+
       const [profile, tracks, artists] = await Promise.all([
         getUserProfile(accessToken),
         getUserTopTracks(accessToken, timeRange, 10),
         getUserTopArtists(accessToken, timeRange, 10)
       ]);
-      
+
       setProfileData(profile);
       setTopTracks(tracks.items || []);
       setTopArtists(artists.items || []);
+      isFirstLoad.current = false;
     } catch (err) {
       setError('Error al cargar tu perfil');
       console.error('Error fetching profile data:', err);
     } finally {
       setLoading(false);
+      setIsUpdating(false);
     }
   }, [accessToken, timeRange]);
 
@@ -69,6 +91,12 @@ const Profile = () => {
     duration_ms: track.duration_ms,
   });
 
+  const openArtistTab = useCallback((artistLabel) => {
+    if (!artistLabel) return;
+    const encodedArtist = encodeURIComponent(artistLabel);
+    navigate(`/home/artist/${encodedArtist}`);
+  }, [navigate]);
+
   const handleTopTrackClick = (track) => {
     if (!track) return;
     if (isCurrentTopTrack(track.id)) {
@@ -87,6 +115,28 @@ const Profile = () => {
     event.stopPropagation();
     enqueueTracks(mapTopTrackToPayload(track));
   };
+
+  const handleBoostToggle = useCallback((event) => {
+    updateAudioSettings({ volumeBoostEnabled: event.target.checked });
+  }, [updateAudioSettings]);
+
+  const handleBoostAmountChange = useCallback((event) => {
+    const amount = Number.parseFloat(event.target.value);
+    if (Number.isFinite(amount)) {
+      updateAudioSettings({ boostAmount: amount });
+    }
+  }, [updateAudioSettings]);
+
+  const handleCrossfadeToggle = useCallback((event) => {
+    updateAudioSettings({ crossfadeEnabled: event.target.checked });
+  }, [updateAudioSettings]);
+
+  const handleCrossfadeSecondsChange = useCallback((event) => {
+    const seconds = Number.parseFloat(event.target.value);
+    if (Number.isFinite(seconds)) {
+      updateAudioSettings({ crossfadeSeconds: seconds });
+    }
+  }, [updateAudioSettings]);
 
   if (loading) {
     return (
@@ -129,68 +179,77 @@ const Profile = () => {
       }}>
         <i className="bi bi-exclamation-triangle" style={{ fontSize: '3rem', color: '#dc3545' }}></i>
         <p style={{ color: '#dc3545', textAlign: 'center' }}>{error}</p>
-        <button
-          onClick={fetchAllData}
-          style={{
-            backgroundColor: '#1DB954',
-            color: 'white',
-            border: 'none',
-            borderRadius: '25px',
-            padding: '10px 20px',
-            cursor: 'pointer'
-          }}
-        >
-          Reintentar
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={fetchAllData}
+            style={{
+              backgroundColor: '#1DB954',
+              color: 'white',
+              border: 'none',
+              borderRadius: '25px',
+              padding: '10px 20px',
+              cursor: 'pointer'
+            }}
+          >
+            Reintentar
+          </button>
+          <button
+            onClick={logout}
+            style={{
+              backgroundColor: 'transparent',
+              color: '#b3b3b3',
+              border: '1px solid #b3b3b3',
+              borderRadius: '25px',
+              padding: '10px 20px',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'white';
+              e.currentTarget.style.borderColor = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '#b3b3b3';
+              e.currentTarget.style.borderColor = '#b3b3b3';
+            }}
+          >
+            Cerrar sesión
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} style={{ padding: '0 20px' }}>
+    <div ref={containerRef} className="profile-container">
       {/* Header del perfil */}
-      <div style={{
-        background: 'linear-gradient(180deg, rgba(29, 185, 84, 0.3) 0%, rgba(18, 18, 18, 0.8) 100%)',
-        borderRadius: '12px',
-        padding: '40px',
-        marginBottom: '30px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '30px'
-      }}>
-        <div style={{
-          width: '150px',
-          height: '150px',
-          borderRadius: '50%',
-          backgroundColor: '#1DB954',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '4rem',
-          color: 'white',
-          fontWeight: 'bold',
-          backgroundImage: profileData?.images?.[0]?.url ? `url(${profileData.images[0].url})` : 'none',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
-        }}>
+      <div className="profile-header">
+        <div
+          className="profile-avatar"
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowAudioSettings((prev) => !prev)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setShowAudioSettings((prev) => !prev);
+            }
+          }}
+          title="Abrir ajustes de audio"
+          style={{
+            backgroundImage: profileData?.images?.[0]?.url ? `url(${profileData.images[0].url})` : 'none',
+          }}
+        >
           {!profileData?.images?.[0]?.url && (profileData?.display_name?.[0] || user?.display_name?.[0] || 'U')}
+          <span className="profile-avatar-settings-badge" aria-hidden="true">
+            <i className="bi bi-sliders"></i>
+          </span>
         </div>
-        <div>
-          <h1 style={{
-            color: 'white',
-            fontSize: '3rem',
-            fontWeight: 'bold',
-            margin: '0 0 10px 0'
-          }}>
+        <div className="profile-info">
+          <h1>
             {profileData?.display_name || user?.display_name || 'Usuario'}
           </h1>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '20px',
-            color: '#b3b3b3',
-            fontSize: '1.1rem'
-          }}>
+          <div className="profile-stats">
             <span>
               <i className="bi bi-people" style={{ marginRight: '8px' }}></i>
               {profileData?.followers?.total?.toLocaleString() || 0} seguidores
@@ -204,34 +263,132 @@ const Profile = () => {
               {profileData?.product || 'Free'}
             </span>
           </div>
+          <button
+            onClick={logout}
+            style={{
+              marginTop: '16px',
+              alignSelf: 'flex-start',
+              backgroundColor: 'transparent',
+              color: '#b3b3b3',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '25px',
+              padding: '6px 16px',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'white';
+              e.currentTarget.style.borderColor = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '#b3b3b3';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+            }}
+          >
+            <i className="bi bi-box-arrow-right"></i>
+            Cerrar sesión
+          </button>
         </div>
       </div>
 
+      {showAudioSettings && (
+        <section className="audio-settings-panel">
+          <div className="audio-settings-header">
+            <h2>
+              <i className="bi bi-sliders" style={{ color: '#1DB954' }}></i>
+              Ajustes de reproducción
+            </h2>
+            <button
+              type="button"
+              className="audio-settings-close-btn"
+              onClick={() => setShowAudioSettings(false)}
+            >
+              Cerrar
+            </button>
+          </div>
+
+          <div className="audio-setting-row">
+            <div className="audio-setting-copy">
+              <h3>Forzar volumen alto</h3>
+              <p>Sube la salida para canciones con mezcla baja (usa procesamiento de audio).</p>
+            </div>
+            <label className="audio-toggle">
+              <input
+                type="checkbox"
+                checked={Boolean(audioSettings?.volumeBoostEnabled)}
+                onChange={handleBoostToggle}
+              />
+              <span>{audioSettings?.volumeBoostEnabled ? 'Activado' : 'Desactivado'}</span>
+            </label>
+          </div>
+
+          <div className="audio-setting-row">
+            <div className="audio-setting-copy">
+              <h3>Intensidad del refuerzo</h3>
+              <p>Controla cuánto se amplifica el audio cuando el refuerzo está activo.</p>
+            </div>
+            <div className="audio-slider-block">
+              <input
+                type="range"
+                min={1}
+                max={2.5}
+                step={0.05}
+                value={audioSettings?.boostAmount ?? 1.35}
+                onChange={handleBoostAmountChange}
+                disabled={!audioSettings?.volumeBoostEnabled}
+              />
+              <span>{(audioSettings?.boostAmount ?? 1.35).toFixed(2)}x</span>
+            </div>
+          </div>
+
+          <div className="audio-setting-row">
+            <div className="audio-setting-copy">
+              <h3>Crossfade al cambiar canción</h3>
+              <p>Aplica un fundido entre canciones para transiciones menos bruscas.</p>
+            </div>
+            <label className="audio-toggle">
+              <input
+                type="checkbox"
+                checked={Boolean(audioSettings?.crossfadeEnabled)}
+                onChange={handleCrossfadeToggle}
+              />
+              <span>{audioSettings?.crossfadeEnabled ? 'Activado' : 'Desactivado'}</span>
+            </label>
+          </div>
+
+          <div className="audio-setting-row">
+            <div className="audio-setting-copy">
+              <h3>Duración del crossfade</h3>
+              <p>Define cuántos segundos dura el fundido de salida y entrada.</p>
+            </div>
+            <div className="audio-slider-block">
+              <input
+                type="range"
+                min={0.5}
+                max={8}
+                step={0.5}
+                value={audioSettings?.crossfadeSeconds ?? 2}
+                onChange={handleCrossfadeSecondsChange}
+                disabled={!audioSettings?.crossfadeEnabled}
+              />
+              <span>{(audioSettings?.crossfadeSeconds ?? 2).toFixed(1)}s</span>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Selector de período */}
-      <div style={{ marginBottom: '30px' }}>
-        <div style={{
-          display: 'flex',
-          gap: '10px',
-          backgroundColor: 'rgba(255, 255, 255, 0.05)',
-          borderRadius: '25px',
-          padding: '4px',
-          width: 'fit-content'
-        }}>
+      <div className="time-range-wrapper">
+        <div className="time-range-selector">
           {timeRangeOptions.map((option) => (
             <button
               key={option.value}
               onClick={() => setTimeRange(option.value)}
-              style={{
-                backgroundColor: timeRange === option.value ? '#1DB954' : 'transparent',
-                color: timeRange === option.value ? 'white' : '#b3b3b3',
-                border: 'none',
-                borderRadius: '20px',
-                padding: '8px 16px',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                fontWeight: '500',
-                transition: 'all 0.3s ease'
-              }}
+              className={`time-range-btn ${timeRange === option.value ? 'active' : ''}`}
             >
               {option.label}
             </button>
@@ -239,157 +396,99 @@ const Profile = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
+      <div
+        className="profile-grid"
+        style={{
+          opacity: isUpdating ? 0.5 : 1,
+          transition: 'opacity 0.3s ease',
+          pointerEvents: isUpdating ? 'none' : 'auto'
+        }}
+      >
         {/* Top Tracks */}
-        <div>
-          <h2 style={{
-            color: 'white',
-            fontSize: '1.5rem',
-            fontWeight: 'bold',
-            marginBottom: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px'
-          }}>
+        <div className="list-section">
+          <h2>
             <i className="bi bi-music-note" style={{ color: '#1DB954' }}></i>
             Tus canciones favoritas
           </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="list-container">
             {topTracks.map((track, index) => {
               const isCurrent = isCurrentTopTrack(track.id);
               const isPlaying = isCurrent && status === 'playing';
               return (
-              <div
-                key={track.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '15px',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  backgroundColor: isCurrent ? 'rgba(29, 185, 84, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                  transition: 'background-color 0.3s ease',
-                  cursor: 'pointer'
-                }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = isCurrent ? 'rgba(29, 185, 84, 0.2)' : 'rgba(255, 255, 255, 0.1)'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = isCurrent ? 'rgba(29, 185, 84, 0.15)' : 'rgba(255, 255, 255, 0.05)'}
-                onClick={() => handleTopTrackClick(track)}
-              >
-                <span style={{
-                  color: isCurrent ? '#1DB954' : '#1DB954',
-                  fontWeight: 'bold',
-                  fontSize: '1.1rem',
-                  width: '25px'
-                }}>
-                  {index + 1}
-                </span>
-                <img
-                  src={track.album?.images?.[2]?.url || '/placeholder-song.png'}
-                  alt={track.name}
-                  style={{ width: '50px', height: '50px', borderRadius: '6px' }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: 'white', fontWeight: '500', fontSize: '0.95rem' }}>
-                    {track.name}
+                <div
+                  key={track.id}
+                  className={`list-item ${isCurrent ? 'current' : ''}`}
+                  onClick={() => handleTopTrackClick(track)}
+                >
+                  <span className="item-index">
+                    {index + 1}
+                  </span>
+                  <img
+                    src={track.album?.images?.[2]?.url || '/placeholder-song.png'}
+                    alt={track.name}
+                    className="item-image"
+                  />
+                  <div className="item-details">
+                    <div className="item-name">
+                      {track.name}
+                    </div>
+                    <div className="item-subtitle">
+                      {track.artists?.map(artist => artist.name).join(', ')}
+                    </div>
                   </div>
-                  <div style={{ color: '#b3b3b3', fontSize: '0.85rem' }}>
-                    {track.artists?.map(artist => artist.name).join(', ')}
+                  <div className="item-actions">
+                    <div className={`item-popularity ${isCurrent ? 'current' : ''}`}>
+                      {isCurrent && (
+                        <i className={`bi ${isPlaying ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'}`} style={{ fontSize: '1rem', color: '#1DB954' }}></i>
+                      )}
+                      {Math.floor(track.popularity)}% popularidad
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(event) => handleQueueTopTrack(event, track)}
+                      className="add-queue-btn"
+                      aria-label="Añadir a la cola"
+                      title="Añadir a la cola"
+                    >
+                      <i className="bi bi-plus" style={{ fontSize: '1rem' }}></i>
+                    </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ color: isCurrent ? '#1DB954' : '#b3b3b3', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {isCurrent && (
-                      <i className={`bi ${isPlaying ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'}`} style={{ fontSize: '1rem', color: '#1DB954' }}></i>
-                    )}
-                    {Math.floor(track.popularity)}% popularidad
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(event) => handleQueueTopTrack(event, track)}
-                    style={{
-                      width: '30px',
-                      height: '30px',
-                      borderRadius: '50%',
-                      border: 'none',
-                      backgroundColor: 'rgba(29,185,84,0.2)',
-                      color: '#1DB954',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.2s ease',
-                    }}
-                    aria-label="Añadir a la cola"
-                    title="Añadir a la cola"
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.35)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(29,185,84,0.2)';
-                    }}
-                  >
-                    <i className="bi bi-plus" style={{ fontSize: '1rem' }}></i>
-                  </button>
-                </div>
-              </div>
-            );
+              );
             })}
           </div>
         </div>
 
         {/* Top Artists */}
-        <div>
-          <h2 style={{
-            color: 'white',
-            fontSize: '1.5rem',
-            fontWeight: 'bold',
-            marginBottom: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px'
-          }}>
+        <div className="list-section">
+          <h2>
             <i className="bi bi-person-heart" style={{ color: '#1DB954' }}></i>
             Tus artistas favoritos
           </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="list-container">
             {topArtists.map((artist, index) => (
               <div
                 key={artist.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '15px',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  transition: 'background-color 0.3s ease',
-                  cursor: 'pointer'
-                }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
+                className="list-item"
+                onClick={() => openArtistTab(artist.name)}
               >
-                <span style={{
-                  color: '#1DB954',
-                  fontWeight: 'bold',
-                  fontSize: '1.1rem',
-                  width: '25px'
-                }}>
+                <span className="item-index">
                   {index + 1}
                 </span>
                 <img
                   src={artist.images?.[2]?.url || '/placeholder-artist.png'}
                   alt={artist.name}
-                  style={{ width: '50px', height: '50px', borderRadius: '50%' }}
+                  className="item-image artist-image"
                 />
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: 'white', fontWeight: '500', fontSize: '0.95rem' }}>
+                <div className="item-details">
+                  <div className="item-name">
                     {artist.name}
                   </div>
-                  <div style={{ color: '#b3b3b3', fontSize: '0.85rem' }}>
+                  <div className="item-subtitle">
                     {artist.genres?.slice(0, 2).join(', ') || 'Artista'}
                   </div>
                 </div>
-                <div style={{ color: '#b3b3b3', fontSize: '0.8rem' }}>
+                <div className="item-popularity">
                   {artist.followers?.total?.toLocaleString() || 0} seguidores
                 </div>
               </div>

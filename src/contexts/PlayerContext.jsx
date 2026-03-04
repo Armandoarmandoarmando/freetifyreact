@@ -1,13 +1,25 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { requestTrackStream, fetchCachedTrack, fetchRecommendations } from '../api';
+import {
+  requestTrackStream,
+  fetchCachedTrack,
+  fetchRecommendations,
+  fetchCacheStatus,
+  subscribeCacheStatus,
+} from '../api';
 import { canUseAudioCache, getTrackRecord, saveTrackBlob } from '../utils/audioCache';
 
 const PlayerContext = createContext(null);
 
-const CACHE_MAP_STORAGE_KEY = 'freetify_track_cache_map';
+const CACHE_MAP_STORAGE_KEY = 'freetify_track_cache_map_v3';
 const VOLUME_STORAGE_KEY = 'freetify_player_volume';
-const MAX_PREFETCH_AHEAD = 3;
+const AUDIO_SETTINGS_STORAGE_KEY = 'freetify_audio_settings_v1';
+const DEFAULT_AUDIO_SETTINGS = {
+  volumeBoostEnabled: false,
+  boostAmount: 1.35,
+  crossfadeEnabled: false,
+  crossfadeSeconds: 2,
+};
 
 const loadCacheMap = () => {
   if (typeof window === 'undefined') return {};
@@ -33,6 +45,36 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const normalizeAudioSettings = (settings = {}) => ({
+  volumeBoostEnabled: Boolean(settings.volumeBoostEnabled),
+  boostAmount: clamp(Number.parseFloat(settings.boostAmount) || DEFAULT_AUDIO_SETTINGS.boostAmount, 1, 2.5),
+  crossfadeEnabled: Boolean(settings.crossfadeEnabled),
+  crossfadeSeconds: clamp(Number.parseFloat(settings.crossfadeSeconds) || DEFAULT_AUDIO_SETTINGS.crossfadeSeconds, 0.5, 8),
+});
+
+const loadAudioSettings = () => {
+  if (typeof window === 'undefined') return DEFAULT_AUDIO_SETTINGS;
+  try {
+    const raw = window.localStorage.getItem(AUDIO_SETTINGS_STORAGE_KEY);
+    if (!raw) return DEFAULT_AUDIO_SETTINGS;
+    return normalizeAudioSettings(JSON.parse(raw));
+  } catch (error) {
+    console.warn('No se pudieron cargar los ajustes de audio', error);
+    return DEFAULT_AUDIO_SETTINGS;
+  }
+};
+
+const persistAudioSettings = (settings) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(AUDIO_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  } catch (error) {
+    console.warn('No se pudieron guardar los ajustes de audio', error);
+  }
+};
+
 const shuffleArray = (items) => {
   const arr = [...items];
   for (let i = arr.length - 1; i > 0; i -= 1) {
@@ -42,10 +84,33 @@ const shuffleArray = (items) => {
   return arr;
 };
 
+const extractSpotifyTrackId = (track) => {
+  if (!track) return null;
+
+  const directId = track.spotify_track_id || track.spotifyTrackId || track.id;
+  if (directId) return directId;
+
+  const candidateUrl = track.url || track.spotify_url || track.spotifyUrl || track?.external_urls?.spotify;
+  if (candidateUrl && typeof candidateUrl === 'string') {
+    const match = candidateUrl.match(/spotify\.com\/track\/([A-Za-z0-9]+)(?:\?|$)/i);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  const candidateUri = track.uri || track.spotify_uri || track.spotifyUri;
+  if (candidateUri && typeof candidateUri === 'string') {
+    const match = candidateUri.match(/^spotify:track:([A-Za-z0-9]+)$/i);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
+};
+
 const trackKey = (track) => (
-  track?.spotify_track_id
-  || track?.spotifyTrackId
-  || track?.id
+  extractSpotifyTrackId(track)
   || track?.nombre
   || track?.title
   || null
@@ -60,7 +125,15 @@ export const PlayerProvider = ({ children }) => {
   const originalQueueRef = useRef([]);
   const queueIndexRef = useRef(-1);
   const cacheMapRef = useRef({});
+  const audioContextRef = useRef(null);
+  const mediaElementSourceRef = useRef(null);
+  const gainNodeRef = useRef(null);
+  const transitionGainRef = useRef(1);
+  const gainFadeIntervalRef = useRef(null);
   const prefetchingRef = useRef(new Set());
+  const prefetchQueuedRef = useRef(new Set());
+  const prefetchPendingListRef = useRef([]);
+  const prefetchWorkerRunningRef = useRef(false);
   const lastRecommendationSeedRef = useRef(null);
   const repeatModeRef = useRef('off');
 
@@ -73,6 +146,7 @@ export const PlayerProvider = ({ children }) => {
   const [queueIndex, setQueueIndex] = useState(-1);
   const [isShuffle, setIsShuffle] = useState(false);
   const [repeatMode, updateRepeatMode] = useState('off');
+  const [audioSettings, setAudioSettingsState] = useState(() => loadAudioSettings());
   const [volume, setVolumeState] = useState(() => {
     if (typeof window === 'undefined') return 1;
     const stored = window.localStorage.getItem(VOLUME_STORAGE_KEY);
@@ -102,13 +176,6 @@ export const PlayerProvider = ({ children }) => {
       audio.loop = repeatMode === 'track';
     }
   }, [repeatMode]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (audio) {
-      audio.volume = volume;
-    }
-  }, [volume]);
 
   const updateCacheMap = useCallback((spotifyTrackId, cacheKey) => {
     if (!spotifyTrackId || !cacheKey) return;
@@ -155,7 +222,7 @@ export const PlayerProvider = ({ children }) => {
     const album = track.album || track.albumName || (track.album && track.album.name) || null;
     const albumImages = track.album && track.album.images ? track.album.images : [];
     const imagen = track.imagen || track.image || (albumImages[0] && albumImages[0].url) || track.cover || null;
-    const spotifyTrackId = track.spotify_track_id || track.spotifyTrackId || track.id || null;
+    const spotifyTrackId = extractSpotifyTrackId(track);
     const durationMs = track.duration_ms ?? (
       typeof track.duracion === 'number'
         ? Math.round(track.duracion * 1000)
@@ -175,6 +242,114 @@ export const PlayerProvider = ({ children }) => {
       url: track.url || null,
     };
   }, []);
+
+  const clearGainFadeInterval = useCallback(() => {
+    if (gainFadeIntervalRef.current) {
+      window.clearInterval(gainFadeIntervalRef.current);
+      gainFadeIntervalRef.current = null;
+    }
+  }, []);
+
+  const ensureAudioGraph = useCallback(() => {
+    if (typeof window === 'undefined') return false;
+    const audio = audioRef.current;
+    if (!audio) return false;
+    if (gainNodeRef.current) return true;
+
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return false;
+
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextCtor();
+      }
+      const context = audioContextRef.current;
+      if (context.state === 'suspended') {
+        context.resume().catch(() => {});
+      }
+
+      if (!mediaElementSourceRef.current) {
+        mediaElementSourceRef.current = context.createMediaElementSource(audio);
+      }
+
+      gainNodeRef.current = context.createGain();
+      mediaElementSourceRef.current.connect(gainNodeRef.current);
+      gainNodeRef.current.connect(context.destination);
+      audio.volume = 1;
+      return true;
+    } catch (error) {
+      console.warn('No se pudo inicializar el pipeline de audio avanzado', error);
+      return false;
+    }
+  }, []);
+
+  const getCrossfadeMs = useCallback((settings = audioSettings) => (
+    Math.round(clamp(settings.crossfadeSeconds, 0.5, 8) * 1000)
+  ), [audioSettings]);
+
+  const applyOutputGain = useCallback((factor = transitionGainRef.current, settings = audioSettings, baseVolume = volume) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const clampedVolume = clamp(baseVolume, 0, 1);
+    const multiplier = settings.volumeBoostEnabled ? settings.boostAmount : 1;
+    const targetGain = Math.max(0, clampedVolume * multiplier * Math.max(0, factor));
+    const graphAlreadyReady = Boolean(gainNodeRef.current);
+    const shouldUseGraph = graphAlreadyReady || settings.volumeBoostEnabled;
+    const hasAudioGraph = shouldUseGraph ? ensureAudioGraph() : false;
+
+    if (hasAudioGraph && gainNodeRef.current) {
+      if (audioContextRef.current?.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
+      audio.volume = 1;
+      gainNodeRef.current.gain.value = clamp(targetGain, 0, 3);
+      return;
+    }
+
+    audio.volume = clamp(targetGain, 0, 1);
+  }, [audioSettings, ensureAudioGraph, volume]);
+
+  const runGainFade = useCallback((targetFactor, durationMs) => new Promise((resolve) => {
+    const from = transitionGainRef.current;
+    const to = clamp(targetFactor, 0, 1);
+    const total = Math.max(0, Math.round(durationMs));
+
+    clearGainFadeInterval();
+
+    if (total <= 0) {
+      transitionGainRef.current = to;
+      applyOutputGain(to);
+      resolve();
+      return;
+    }
+
+    const startedAt = Date.now();
+    gainFadeIntervalRef.current = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const progress = clamp(elapsed / total, 0, 1);
+      const next = from + (to - from) * progress;
+      transitionGainRef.current = next;
+      applyOutputGain(next);
+      if (progress >= 1) {
+        clearGainFadeInterval();
+        resolve();
+      }
+    }, 30);
+  }), [applyOutputGain, clearGainFadeInterval]);
+
+  const updateAudioSettings = useCallback((updates) => {
+    setAudioSettingsState((previous) => {
+      const patch = typeof updates === 'function' ? updates(previous) : updates;
+      const next = normalizeAudioSettings({ ...previous, ...(patch || {}) });
+      persistAudioSettings(next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    applyOutputGain();
+  }, [applyOutputGain, audioSettings, volume]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -241,7 +416,7 @@ export const PlayerProvider = ({ children }) => {
     }
   }, []);
 
-  const startPlaybackWithBlob = useCallback(async ({ blob, contentType, trackMeta }) => {
+  const startPlaybackWithBlob = useCallback(async ({ blob, contentType, trackMeta, fadeInMs = 0 }) => {
     const audio = audioRef.current;
     if (!audio) throw new Error('Reproductor no disponible');
 
@@ -255,6 +430,9 @@ export const PlayerProvider = ({ children }) => {
     if (contentType) {
       audio.type = contentType;
     }
+    clearGainFadeInterval();
+    transitionGainRef.current = fadeInMs > 0 ? 0 : 1;
+    applyOutputGain(transitionGainRef.current);
 
     setCurrentTrack(trackMeta);
     setStatus('loading');
@@ -263,27 +441,107 @@ export const PlayerProvider = ({ children }) => {
 
     try {
       await audio.play();
+      if (fadeInMs > 0) {
+        await runGainFade(1, fadeInMs);
+      }
     } catch (playError) {
       setError('Necesitas interactuar para reproducir audio');
       setStatus('error');
+      transitionGainRef.current = 1;
+      applyOutputGain(1);
       throw playError;
     }
-  }, [revokeObjectUrl]);
+  }, [applyOutputGain, clearGainFadeInterval, revokeObjectUrl, runGainFade]);
 
   const waitForCachedBlob = useCallback(async (cacheKey, fallbackContentType) => {
     if (!cacheKey) return null;
 
-    const maxAttempts = 8;
-    const baseDelay = 600;
+    const fetchBlobFromRemoteCache = async () => {
+      const response = await fetchCachedTrack(cacheKey);
+      if (!response) {
+        return null;
+      }
+      const blob = await response.blob();
+      if (!blob || blob.size <= 0) {
+        return null;
+      }
+      const contentType = response.headers.get('Content-Type') || fallbackContentType;
+      await saveTrackBlob(cacheKey, blob, contentType);
+      return { blob, contentType };
+    };
 
+    try {
+      const initialStatus = await fetchCacheStatus(cacheKey);
+      if (initialStatus?.status === 'cached') {
+        const cached = await fetchBlobFromRemoteCache();
+        if (cached) {
+          return cached;
+        }
+      }
+      if (initialStatus?.status === 'failed') {
+        return null;
+      }
+    } catch (err) {
+      console.warn('No se pudo consultar estado inicial de caché', err);
+    }
+
+    if (typeof window !== 'undefined' && typeof window.EventSource !== 'undefined') {
+      const eventResult = await new Promise((resolve) => {
+        let settled = false;
+        let unsubscribe = () => {};
+
+        const done = (value) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          unsubscribe();
+          resolve(value);
+        };
+
+        const timeoutId = window.setTimeout(() => done('timeout'), 7500);
+        unsubscribe = subscribeCacheStatus(cacheKey, {
+          onStatus: (payload) => {
+            const currentStatus = payload?.status;
+            if (currentStatus === 'cached') {
+              done('cached');
+              return;
+            }
+            if (currentStatus === 'failed') {
+              done('failed');
+            }
+          },
+          onError: () => done('error'),
+        });
+      });
+
+      if (eventResult === 'cached') {
+        try {
+          const cached = await fetchBlobFromRemoteCache();
+          if (cached) {
+            return cached;
+          }
+        } catch (err) {
+          console.warn('Evento de caché listo pero no se pudo descargar blob', err);
+        }
+      }
+
+      if (eventResult === 'failed') {
+        return null;
+      }
+    }
+
+    const maxAttempts = 5;
+    const baseDelay = 700;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
-        const response = await fetchCachedTrack(cacheKey);
-        if (response) {
-          const blob = await response.blob();
-          const contentType = response.headers.get('Content-Type') || fallbackContentType;
-          await saveTrackBlob(cacheKey, blob, contentType);
-          return { blob, contentType };
+        const cached = await fetchBlobFromRemoteCache();
+        if (cached) {
+          return cached;
+        }
+
+        const statusPayload = await fetchCacheStatus(cacheKey);
+        if (statusPayload?.status === 'failed') {
+          return null;
         }
       } catch (err) {
         console.warn('Error consultando caché remota', err);
@@ -328,16 +586,63 @@ export const PlayerProvider = ({ children }) => {
     }
   }, [normalizeTrack, updateCacheMap, waitForCachedBlob]);
 
+  const startPrefetchWorker = useCallback(() => {
+    if (prefetchWorkerRunningRef.current) {
+      return;
+    }
+
+    prefetchWorkerRunningRef.current = true;
+    void (async () => {
+      while (prefetchPendingListRef.current.length > 0) {
+        const nextItem = prefetchPendingListRef.current.shift();
+        if (!nextItem?.key || !nextItem?.track) {
+          continue;
+        }
+        prefetchQueuedRef.current.delete(nextItem.key);
+        await prefetchTrack(nextItem.track);
+      }
+    })().finally(() => {
+      prefetchWorkerRunningRef.current = false;
+      if (prefetchPendingListRef.current.length > 0) {
+        startPrefetchWorker();
+      }
+    });
+  }, [prefetchTrack]);
+
+  const clearPendingPrefetchQueue = useCallback(() => {
+    prefetchPendingListRef.current = [];
+    prefetchQueuedRef.current.clear();
+  }, []);
+
+  const enqueuePrefetchTrack = useCallback((track) => {
+    const normalized = normalizeTrack(track);
+    if (!normalized) return;
+
+    const uniqueKey = trackKey(normalized);
+    if (!uniqueKey) return;
+
+    if (prefetchingRef.current.has(uniqueKey) || prefetchQueuedRef.current.has(uniqueKey)) {
+      return;
+    }
+
+    prefetchQueuedRef.current.add(uniqueKey);
+    prefetchPendingListRef.current.push({
+      key: uniqueKey,
+      track: { ...track, ...normalized },
+    });
+    startPrefetchWorker();
+  }, [normalizeTrack, startPrefetchWorker]);
+
   const prefetchUpcomingTracks = useCallback((startIndex = 0) => {
     const snapshot = queueRef.current;
     if (!snapshot.length) return;
 
-    for (let idx = startIndex; idx < snapshot.length && idx < startIndex + MAX_PREFETCH_AHEAD; idx += 1) {
+    for (let idx = startIndex; idx < snapshot.length; idx += 1) {
       const candidate = snapshot[idx];
       if (!candidate) continue;
-      prefetchTrack(candidate);
+      enqueuePrefetchTrack(candidate);
     }
-  }, [prefetchTrack]);
+  }, [enqueuePrefetchTrack]);
 
   const setQueueTracks = useCallback((tracks, startAt = 0) => {
     const normalized = [];
@@ -349,6 +654,7 @@ export const PlayerProvider = ({ children }) => {
     });
 
     if (!normalized.length) {
+      clearPendingPrefetchQueue();
       updateQueueState([]);
       updateQueueIndex(-1);
       originalQueueRef.current = [];
@@ -356,20 +662,21 @@ export const PlayerProvider = ({ children }) => {
       return;
     }
 
+    clearPendingPrefetchQueue();
     const safeIndex = Math.max(0, Math.min(startAt, normalized.length - 1));
     updateQueueState(normalized);
     updateQueueIndex(safeIndex);
     refreshOriginalQueueSnapshot();
     lastRecommendationSeedRef.current = null;
     prefetchUpcomingTracks(safeIndex + 1);
-  }, [normalizeTrack, prefetchUpcomingTracks, refreshOriginalQueueSnapshot, updateQueueIndex, updateQueueState]);
+  }, [clearPendingPrefetchQueue, normalizeTrack, prefetchUpcomingTracks, refreshOriginalQueueSnapshot, updateQueueIndex, updateQueueState]);
 
-  const enqueueRecommendations = useCallback(async (seedTrack, { limit = 10 } = {}) => {
+  const enqueueRecommendations = useCallback(async (seedTrack, { limit = 10, force = false } = {}) => {
     if (!seedTrack?.spotify_track_id) {
       return;
     }
 
-    if (lastRecommendationSeedRef.current === seedTrack.spotify_track_id) {
+    if (!force && lastRecommendationSeedRef.current === seedTrack.spotify_track_id) {
       return;
     }
 
@@ -418,13 +725,13 @@ export const PlayerProvider = ({ children }) => {
       const nextQueue = [...before, ...itemsToInsert, ...after];
 
       updateQueueState(nextQueue);
-      itemsToInsert.forEach((item) => prefetchTrack(item));
+      itemsToInsert.forEach((item) => enqueuePrefetchTrack(item));
       refreshOriginalQueueSnapshot();
       lastRecommendationSeedRef.current = seedTrack.spotify_track_id;
     } catch (error) {
       console.warn('No se pudieron obtener recomendaciones', error);
     }
-  }, [isShuffle, normalizeTrack, prefetchTrack, refreshOriginalQueueSnapshot, updateQueueState]);
+  }, [enqueuePrefetchTrack, isShuffle, normalizeTrack, refreshOriginalQueueSnapshot, updateQueueState]);
 
   const playTrack = useCallback(async (track, options = {}) => {
     const audio = audioRef.current;
@@ -446,6 +753,8 @@ export const PlayerProvider = ({ children }) => {
     const sessionId = playSessionRef.current + 1;
     playSessionRef.current = sessionId;
     const ensureActive = () => playSessionRef.current === sessionId;
+    const shouldCrossfade = Boolean(audioSettings.crossfadeEnabled);
+    const fadeMs = shouldCrossfade ? getCrossfadeMs(audioSettings) : 0;
 
     const artists = preparedTrack.artistas || [];
     const metadata = {
@@ -484,10 +793,22 @@ export const PlayerProvider = ({ children }) => {
       });
       refreshOriginalQueueSnapshot();
     } else {
+      clearPendingPrefetchQueue();
       updateQueueState([preparedTrack]);
       updateQueueIndex(0);
       refreshOriginalQueueSnapshot();
       lastRecommendationSeedRef.current = null;
+    }
+
+    if (shouldCrossfade && !audio.paused && audio.src) {
+      await runGainFade(0, fadeMs);
+      if (!ensureActive()) {
+        return;
+      }
+    } else {
+      clearGainFadeInterval();
+      transitionGainRef.current = 1;
+      applyOutputGain(1);
     }
 
     setStatus('loading');
@@ -509,7 +830,12 @@ export const PlayerProvider = ({ children }) => {
           metadata.cacheKey = localCacheKey;
           metadata.source = 'local-cache';
           metadata.contentType = record.contentType;
-          await startPlaybackWithBlob({ blob: record.blob, contentType: record.contentType, trackMeta: metadata });
+          await startPlaybackWithBlob({
+            blob: record.blob,
+            contentType: record.contentType,
+            trackMeta: metadata,
+            fadeInMs: fadeMs,
+          });
           return;
         }
       } catch (cacheError) {
@@ -559,11 +885,19 @@ export const PlayerProvider = ({ children }) => {
           throw new Error('cache_missing');
         }
         const blob = await cachedResponse.blob();
+        if (!blob || blob.size <= 0) {
+          throw new Error('cache_empty');
+        }
         const contentType = cachedResponse.headers.get('Content-Type') || response.content_type;
         metadata.source = 'cache';
         metadata.contentType = contentType;
         await saveTrackBlob(cacheKey, blob, contentType);
-        await startPlaybackWithBlob({ blob, contentType, trackMeta: metadata });
+        await startPlaybackWithBlob({
+          blob,
+          contentType,
+          trackMeta: metadata,
+          fadeInMs: fadeMs,
+        });
         return;
       } catch (cachedError) {
         console.warn('No se pudo usar caché inmediata, se reproducirá streaming', cachedError);
@@ -586,6 +920,7 @@ export const PlayerProvider = ({ children }) => {
             blob: cachedResult.blob,
             contentType: cachedResult.contentType,
             trackMeta: metadata,
+            fadeInMs: fadeMs,
           });
           return;
         }
@@ -601,12 +936,18 @@ export const PlayerProvider = ({ children }) => {
     audio.src = directUrl;
     audio.type = response.content_type || 'audio/mp4';
     audio.load();
+    clearGainFadeInterval();
+    transitionGainRef.current = shouldCrossfade ? 0 : 1;
+    applyOutputGain(transitionGainRef.current);
     metadata.source = response.source || 'stream';
     metadata.contentType = response.content_type;
     setCurrentTrack({ ...metadata });
 
     try {
       await audio.play();
+      if (shouldCrossfade) {
+        await runGainFade(1, fadeMs);
+      }
     } catch (streamError) {
       console.warn('Error al iniciar streaming directo, intentando esperar caché', streamError);
       if (cacheKey) {
@@ -621,6 +962,7 @@ export const PlayerProvider = ({ children }) => {
             blob: cachedResult.blob,
             contentType: cachedResult.contentType,
             trackMeta: metadata,
+            fadeInMs: fadeMs,
           });
           return;
         }
@@ -630,6 +972,8 @@ export const PlayerProvider = ({ children }) => {
         setError('No se pudo iniciar la reproducción');
         setStatus('error');
       }
+      transitionGainRef.current = 1;
+      applyOutputGain(1);
       throw streamError;
     }
 
@@ -637,9 +981,10 @@ export const PlayerProvider = ({ children }) => {
 
     const remainingAhead = queueRef.current.length - (queueIndexRef.current + 1);
     if ((autoEnqueue || remainingAhead <= 3) && preparedTrack.spotify_track_id) {
-      enqueueRecommendations(preparedTrack);
+      const forceRecommendations = isShuffle && !maintainQueue;
+      enqueueRecommendations(preparedTrack, { limit: 10, force: forceRecommendations });
     }
-  }, [enqueueRecommendations, normalizeTrack, prefetchUpcomingTracks, refreshOriginalQueueSnapshot, revokeObjectUrl, startPlaybackWithBlob, updateCacheMap, updateQueueIndex, updateQueueState, waitForCachedBlob]);
+  }, [applyOutputGain, audioSettings, clearGainFadeInterval, clearPendingPrefetchQueue, enqueueRecommendations, getCrossfadeMs, isShuffle, normalizeTrack, prefetchUpcomingTracks, refreshOriginalQueueSnapshot, revokeObjectUrl, runGainFade, startPlaybackWithBlob, updateCacheMap, updateQueueIndex, updateQueueState, waitForCachedBlob]);
 
   const enqueueTracks = useCallback(
     (tracks, { insertAfterCurrent = true, playIfIdle = false } = {}) => {
@@ -680,7 +1025,7 @@ export const PlayerProvider = ({ children }) => {
         return nextQueue;
       });
 
-      additions.forEach(prefetchTrack);
+      additions.forEach(enqueuePrefetchTrack);
 
       if (queueIndexRef.current === -1 && insertedIndex !== null) {
         updateQueueIndex(insertedIndex);
@@ -693,12 +1038,22 @@ export const PlayerProvider = ({ children }) => {
             .catch((error) => console.error('No se pudo iniciar reproducción al agregar a la cola', error));
         }
       }
+
+      // Regla: al agregar una canción con modo aleatorio activo, añade 10 similares.
+      if (isShuffle && additions.length === 1) {
+        const seedTrack = additions[0];
+        if (seedTrack?.spotify_track_id) {
+          enqueueRecommendations(seedTrack, { limit: 10, force: true })
+            .catch((error) => console.error('No se pudieron agregar recomendaciones automáticas', error));
+        }
+      }
     },
     [
       normalizeTrack,
       isShuffle,
+      enqueueRecommendations,
       updateQueueState,
-      prefetchTrack,
+      enqueuePrefetchTrack,
       updateQueueIndex,
       status,
       currentTrack,
@@ -757,11 +1112,50 @@ export const PlayerProvider = ({ children }) => {
   }, [playTrack]);
 
   const toggleShuffle = useCallback(() => {
-    setIsShuffle((prev) => !prev);
-  }, []);
+    const enablingShuffle = !isShuffle;
+    setIsShuffle((prev) => {
+      const next = !prev;
+      if (next) {
+        // Al activar shuffle permitimos una nueva ronda de recomendaciones manuales.
+        lastRecommendationSeedRef.current = null;
+      }
+      return next;
+    });
+    if (!enablingShuffle) {
+      return;
+    }
+
+    const snapshot = queueRef.current;
+    const hasSingleTrackQueue = snapshot.length <= 1;
+    if (!hasSingleTrackQueue) {
+      return;
+    }
+
+    const currentQueueTrack = snapshot[Math.max(0, queueIndexRef.current)] || null;
+    const seedTrack = currentQueueTrack || (
+      currentTrack?.spotifyTrackId
+        ? {
+            nombre: currentTrack.title,
+            artistas: currentTrack.artists || [],
+            album: currentTrack.album || null,
+            imagen: currentTrack.image || null,
+            spotify_track_id: currentTrack.spotifyTrackId,
+          }
+        : null
+    );
+
+    if (seedTrack?.spotify_track_id) {
+      enqueueRecommendations(seedTrack, { limit: 10, force: true })
+        .catch((error) => console.error('No se pudieron agregar recomendaciones al activar aleatorio', error));
+    }
+  }, [currentTrack, enqueueRecommendations, isShuffle]);
 
   const setShuffle = useCallback((enabled) => {
-    setIsShuffle(Boolean(enabled));
+    const next = Boolean(enabled);
+    if (next) {
+      lastRecommendationSeedRef.current = null;
+    }
+    setIsShuffle(next);
   }, []);
 
   const cycleRepeatMode = useCallback(() => {
@@ -789,10 +1183,6 @@ export const PlayerProvider = ({ children }) => {
         } catch (storageError) {
           console.warn('No se pudo guardar el volumen', storageError);
         }
-      }
-      const audio = audioRef.current;
-      if (audio) {
-        audio.volume = clamped;
       }
       return clamped;
     });
@@ -851,6 +1241,7 @@ export const PlayerProvider = ({ children }) => {
   }, [queue, queueIndex, prefetchUpcomingTracks]);
 
   useEffect(() => () => revokeObjectUrl(), [revokeObjectUrl]);
+  useEffect(() => () => clearGainFadeInterval(), [clearGainFadeInterval]);
 
   const value = useMemo(() => ({
     audioRef,
@@ -863,6 +1254,7 @@ export const PlayerProvider = ({ children }) => {
     isShuffle,
     repeatMode,
     volume,
+    audioSettings,
     playTrack,
     playNext,
     playPrevious,
@@ -873,6 +1265,7 @@ export const PlayerProvider = ({ children }) => {
     toggleShuffle,
     setShuffle,
     setVolume,
+    updateAudioSettings,
     changeVolume,
     enqueueTracks,
     cycleRepeatMode,
@@ -888,6 +1281,7 @@ export const PlayerProvider = ({ children }) => {
     isShuffle,
     repeatMode,
     volume,
+    audioSettings,
     playTrack,
     playNext,
     playPrevious,
@@ -898,6 +1292,7 @@ export const PlayerProvider = ({ children }) => {
     toggleShuffle,
     setShuffle,
     setVolume,
+    updateAudioSettings,
     changeVolume,
     enqueueTracks,
     cycleRepeatMode,

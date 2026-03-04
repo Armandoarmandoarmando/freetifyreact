@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('spotify_access_token');
     const userData = localStorage.getItem('user_data');
     const guestMode = localStorage.getItem('guest_mode');
-    
+
     if (token && userData) {
       setAccessToken(token);
       setUser(JSON.parse(userData));
@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }) => {
       setIsGuest(true);
       setIsAuthenticated(false);
     }
-    
+
     setLoading(false);
   }, []);
 
@@ -48,7 +48,7 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
     setIsAuthenticated(true);
     setIsGuest(false);
-    
+
     localStorage.setItem('spotify_access_token', tokenData.access_token);
     localStorage.setItem('refresh_token', tokenData.refresh_token);
     localStorage.setItem('user_data', JSON.stringify(userData));
@@ -61,12 +61,13 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setIsAuthenticated(false);
     setIsGuest(false);
-    
+
     localStorage.removeItem('spotify_access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_data');
     localStorage.removeItem('token_expires_at');
     localStorage.removeItem('guest_mode');
+    window.location.href = '/';
   };
 
   const requireAuth = () => {

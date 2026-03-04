@@ -1,0 +1,75 @@
+/* By default, hide the mobile nav on larger screens */
+.mobile-nav-container {
+    display: none;
+}
+
+/* Mobile and Tablet responsive styles */
+@media (max-width: 1024px) {
+    .mobile-nav-container {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 60px;
+        background-color: rgba(18, 18, 18, 0.95);
+        backdrop-filter: blur(10px);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        justify-content: space-around;
+        align-items: center;
+        z-index: 999;
+        /* Stay above player bar and content */
+        padding-bottom: env(safe-area-inset-bottom);
+        /* For iOS devices */
+    }
+
+    .mobile-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        color: #b3b3b3;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+        transition: color 0.2s ease;
+        text-decoration: none;
+        padding: 6px;
+        position: relative;
+    }
+
+    .mobile-nav-item.active {
+        color: white;
+    }
+
+    .mobile-nav-item.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .nav-icon {
+        font-size: 1.4rem;
+        margin-bottom: 2px;
+    }
+
+    .mobile-nav-item.active .nav-icon {
+        color: #1DB954;
+    }
+
+    .nav-label {
+        font-size: 0.65rem;
+        font-weight: 500;
+    }
+
+    .lock-icon {
+        position: absolute;
+        top: 6px;
+        right: 50%;
+        transform: translateX(18px);
+        /* Shift icon right */
+        font-size: 0.6rem;
+        color: #b3b3b3;
+    }
+}
