@@ -42,6 +42,9 @@ const persistCacheMap = (map) => {
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const CACHE_WAIT_SSE_TIMEOUT_MS = 30000;
+const CACHE_WAIT_POLL_ATTEMPTS = 12;
+const CACHE_WAIT_BASE_DELAY_MS = 1000;
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -498,7 +501,7 @@ export const PlayerProvider = ({ children }) => {
           resolve(value);
         };
 
-        const timeoutId = window.setTimeout(() => done('timeout'), 7500);
+        const timeoutId = window.setTimeout(() => done('timeout'), CACHE_WAIT_SSE_TIMEOUT_MS);
         unsubscribe = subscribeCacheStatus(cacheKey, {
           onStatus: (payload) => {
             const currentStatus = payload?.status;
@@ -530,8 +533,8 @@ export const PlayerProvider = ({ children }) => {
       }
     }
 
-    const maxAttempts = 5;
-    const baseDelay = 700;
+    const maxAttempts = CACHE_WAIT_POLL_ATTEMPTS;
+    const baseDelay = CACHE_WAIT_BASE_DELAY_MS;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
         const cached = await fetchBlobFromRemoteCache();
